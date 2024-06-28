@@ -29,9 +29,11 @@ namespace Pictures
         private ListView selectionListView;
         private string storeName = "demostore1_123MainStr";
         private Dictionary<string, bool> modifierSelectionState;
+        private Button finishButton; // Button for the final sale screen
+        private List<Control> initialControls; // List to store the initial state of controls
 
         // Enum to capture the current state
-        private enum State { Category, Item, Modifier }
+        private enum State { Category = 0, Item = 1, Modifier = 2, FinalSale = 3 }
         private State currentState;
 
         public Form1()
@@ -47,6 +49,7 @@ namespace Pictures
             LoadModifierData();
             LoadModifierDetailData();
             CreateCategoryPictureBoxesAndPanels(jsonPath);
+            SaveInitialState();
             modifierSelectionState = new Dictionary<string, bool>();
         }
 
@@ -70,7 +73,7 @@ namespace Pictures
                 Text = "Previous",
                 AutoSize = true,
                 Margin = new Padding(10),
-                Visible = false // Initially invisible
+                Visible = true // Initially visible for testing
             };
             previousButton.Click += PreviousButton_Click;
 
@@ -79,9 +82,18 @@ namespace Pictures
                 Text = "Next",
                 AutoSize = true,
                 Margin = new Padding(10),
-                Visible = false // Initially invisible
+                Visible = true // Initially visible for testing
             };
             nextButton.Click += NextButton_Click;
+
+            finishButton = new Button
+            {
+                Text = "Finish Sale",
+                AutoSize = true,
+                Margin = new Padding(10),
+                Visible = false // Initially invisible
+            };
+            finishButton.Click += FinishButton_Click;
 
             FlowLayoutPanel buttonPanel = new FlowLayoutPanel
             {
@@ -92,6 +104,7 @@ namespace Pictures
 
             buttonPanel.Controls.Add(previousButton);
             buttonPanel.Controls.Add(nextButton);
+            buttonPanel.Controls.Add(finishButton);
 
             TableLayoutPanel rightPanel = new TableLayoutPanel
             {
@@ -430,49 +443,42 @@ namespace Pictures
             switch (currentState)
             {
                 case State.Item:
-                case State.Modifier:
                     CreateCategoryPictureBoxesAndPanels(jsonPath);
+                    break;
+                case State.Modifier:
+                    if (currentModifierIndex > 0)
+                    {
+                        currentModifierIndex--;
+                        DisplayModifierDetails(currentModifierCodes[currentModifierIndex]);
+                    }
+                    else
+                    {
+                        RefreshCategory(previousCategory);
+                    }
+                    break;
+                case State.FinalSale:
+                    currentModifierIndex = currentModifierCodes.Count - 1;
+                    DisplayModifierDetails(currentModifierCodes[currentModifierIndex]);
+                    currentState = State.Modifier;
                     break;
             }
 
-            if (currentState == State.Modifier && currentModifierIndex >= 0)
-            {
-                string modCode = currentModifierCodes[currentModifierIndex];
-                var modifierDef = modifierData["data"]
-                    .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == modCode);
-
-                if (modifierDef != null)
-                {
-                    string modChoiceType = modifierDef["modchoice"]?.ToString() ?? "one";
-                    if (modChoiceType == "one")
-                    {
-                        var modifierDetails = modifierDetailData["data"]
-                            .Where(d => d["modcode"] != null && d["modcode"].ToString() == modCode)
-                            .ToList();
-
-                        foreach (var detail in modifierDetails)
-                        {
-                            string detailDesc = detail["description"]?.ToString() ?? "Unknown Detail";
-                            if (modifierSelectionState.ContainsKey(detailDesc) && modifierSelectionState[detailDesc])
-                            {
-                                modifierSelectionState[detailDesc] = false;
-                                ListViewItem itemToRemove = selectionListView.Items.Cast<ListViewItem>().FirstOrDefault(item => item.Text == detailDesc);
-                                if (itemToRemove != null)
-                                {
-                                    selectionListView.Items.Remove(itemToRemove);
-                                    Log($"Deselected modifier detail: {detailDesc}");
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            UpdateNavigationButtons();
         }
 
         private void NextButton_Click(object sender, EventArgs e)
         {
             Log("Next button clicked.");
             DisplayNextModifier();
+            UpdateNavigationButtons();
+        }
+
+        private void FinishButton_Click(object sender, EventArgs e)
+        {
+            Log("Finish button clicked.");
+            ClearSelectionAndReset();
+            RestoreInitialState();
+            UpdateNavigationButtons();
         }
 
         // State Transition Methods
@@ -572,7 +578,8 @@ namespace Pictures
             if (currentModifierIndex >= currentModifierCodes.Count)
             {
                 Log("No more modifiers to display.");
-                nextButton.Visible = false;
+                currentState = State.FinalSale; // Transition to final sale screen
+                DisplayFinalSaleScreen();
                 return;
             }
 
@@ -675,6 +682,34 @@ namespace Pictures
 
                 UpdatePictureBoxSelectionState(detailPictureBox, modifierSelectionState[detailDesc], detailDesc, modCode);
             }
+
+            UpdateNavigationButtons();
+        }
+
+        private void DisplayFinalSaleScreen()
+        {
+            Log("Displaying final sale screen.");
+            panel.Controls.Clear();
+
+            Label finalMessage = new Label
+            {
+                Text = "Thank you for your purchase!",
+                AutoSize = true,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Margin = new Padding(10),
+                Font = new Font("Arial", 24, FontStyle.Bold)
+            };
+
+            FlowLayoutPanel finalPanel = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.TopDown,
+                AutoSize = true,
+                Margin = new Padding(10)
+            };
+
+            finalPanel.Controls.Add(finalMessage);
+            finalPanel.Controls.Add(finishButton);
+            panel.Controls.Add(finalPanel);
 
             UpdateNavigationButtons();
         }
@@ -814,6 +849,7 @@ namespace Pictures
             }
 
             nextButton.Visible = shouldShowNextButton;
+            finishButton.Visible = (currentState == State.FinalSale);
             Log("Updated navigation buttons.");
         }
 
@@ -836,6 +872,37 @@ namespace Pictures
             catch (Exception ex)
             {
                 MessageBox.Show("Failed to write log: " + ex.Message);
+            }
+        }
+
+        private void ClearSelectionAndReset()
+        {
+            Log("Clearing selection and resetting state.");
+            selectionListView.Items.Clear();
+            modifierSelectionState.Clear();
+            currentModifierCodes.Clear();
+            currentModifierIndex = 0;
+            previousCategory = null;
+            currentState = State.Category; // Reset state to Category
+        }
+
+        private void SaveInitialState()
+        {
+            Log("Saving initial state of the form.");
+            initialControls = new List<Control>();
+            foreach (Control control in this.Controls)
+            {
+                initialControls.Add(control);
+            }
+        }
+
+        private void RestoreInitialState()
+        {
+            Log("Restoring initial state of the form.");
+            this.Controls.Clear();
+            foreach (Control control in initialControls)
+            {
+                this.Controls.Add(control);
             }
         }
     }
