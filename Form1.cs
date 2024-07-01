@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -12,11 +11,13 @@ namespace Pictures
     public partial class Form1 : Form
     {
         private TableLayoutPanel panel;
-        private TableLayoutPanel modifierPanel;
+        private Stack<string> navigationHistory;
+        private Button nextButton;
+        private Button previousButton;
         private string jsonPath;
         private string modifierJsonPath;
         private string modifierDetailJsonPath;
-        private Dictionary<string, List<Control>> categoryControls;
+        private Dictionary<string, List<FlowLayoutPanel>> categoryControls;
         private List<FlowLayoutPanel> categoryPanels;
         private JObject itemData;
         private JObject modifierData;
@@ -24,39 +25,50 @@ namespace Pictures
         private List<string> currentModifierCodes;
         private int currentModifierIndex;
         private string previousCategory;
-        private Button previousButton;
-        private Button nextButton;
         private ListView selectionListView;
         private string storeName = "demostore1_123MainStr";
         private Dictionary<string, bool> modifierSelectionState;
-        private Button finishButton; // Button for the final sale screen
-        private List<Control> initialControls; // List to store the initial state of controls
-
-        // Enum to capture the current state
-        private enum State { Category = 0, Item = 1, Modifier = 2, FinalSale = 3 }
-        private State currentState;
 
         public Form1()
         {
             InitializeComponent();
+            InitializeNavigationButtons();
+            navigationHistory = new Stack<string>();
             this.WindowState = FormWindowState.Maximized;
             string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
             jsonPath = Path.Combine(desktopPath, "formatted_items.txt");
             modifierJsonPath = Path.Combine(desktopPath, "formatted_modifierDef.txt");
             modifierDetailJsonPath = Path.Combine(desktopPath, "formatted_modifierDetail.txt");
-            InitializeSelectionListViewAndNavigationButtons();
-            LoadItemData();
-            LoadModifierData();
-            LoadModifierDetailData();
-            CreateCategoryPictureBoxesAndPanels(jsonPath);
-            SaveInitialState();
+            InitializeSelectionListView();
+            LoadData();
+            CreateCategoryPictureBoxesAndPanels();
             modifierSelectionState = new Dictionary<string, bool>();
         }
 
-        // Initialization Methods
-        private void InitializeSelectionListViewAndNavigationButtons()
+        private void InitializeNavigationButtons()
         {
-            Log("Initializing selection list view and navigation buttons.");
+            nextButton = new Button
+            {
+                Text = "Next",
+                Dock = DockStyle.Bottom
+            };
+            nextButton.Click += NextButton_Click;
+
+            previousButton = new Button
+            {
+                Text = "Previous",
+                Dock = DockStyle.Bottom,
+                Enabled = false // Initially disabled
+            };
+            previousButton.Click += PreviousButton_Click;
+
+            this.Controls.Add(nextButton);
+            this.Controls.Add(previousButton);
+        }
+
+        private void InitializeSelectionListView()
+        {
+            Log("Initializing selection list view.");
             selectionListView = new ListView
             {
                 View = View.Details,
@@ -68,170 +80,67 @@ namespace Pictures
             selectionListView.Columns.Add("Item", 150);
             selectionListView.Columns.Add("Price", 150);
 
-            previousButton = new Button
-            {
-                Text = "Previous",
-                AutoSize = true,
-                Margin = new Padding(10),
-                Visible = true // Initially visible for testing
-            };
-            previousButton.Click += PreviousButton_Click;
-
-            nextButton = new Button
-            {
-                Text = "Next",
-                AutoSize = true,
-                Margin = new Padding(10),
-                Visible = true // Initially visible for testing
-            };
-            nextButton.Click += NextButton_Click;
-
-            finishButton = new Button
-            {
-                Text = "Finish Sale",
-                AutoSize = true,
-                Margin = new Padding(10),
-                Visible = false // Initially invisible
-            };
-            finishButton.Click += FinishButton_Click;
-
-            FlowLayoutPanel buttonPanel = new FlowLayoutPanel
-            {
-                FlowDirection = FlowDirection.LeftToRight,
-                AutoSize = true,
-                Margin = new Padding(10),
-            };
-
-            buttonPanel.Controls.Add(previousButton);
-            buttonPanel.Controls.Add(nextButton);
-            buttonPanel.Controls.Add(finishButton);
-
             TableLayoutPanel rightPanel = new TableLayoutPanel
             {
                 ColumnCount = 1,
-                RowCount = 2,
+                RowCount = 1,
                 Dock = DockStyle.Right,
                 Width = 300 // Set the width to accommodate buttons and listview
             };
 
-            rightPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             rightPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F)); // Make the ListView take the remaining space
-            rightPanel.Controls.Add(buttonPanel, 0, 0);
-            rightPanel.Controls.Add(selectionListView, 0, 1);
+            rightPanel.Controls.Add(selectionListView, 0, 0);
 
             this.Controls.Add(rightPanel);
         }
 
-        // Data Loading Methods
-        private void LoadItemData()
+        private void LoadData()
         {
-            Log("Loading item data.");
-            if (!File.Exists(jsonPath))
+            itemData = LoadJsonData(jsonPath, "Item");
+            modifierData = LoadJsonData(modifierJsonPath, "Modifier");
+            modifierDetailData = LoadJsonData(modifierDetailJsonPath, "Modifier Detail");
+        }
+
+        private JObject LoadJsonData(string path, string dataType)
+        {
+            Log($"Loading {dataType} data.");
+            if (!File.Exists(path))
             {
-                MessageBox.Show("Item JSON file not found: " + jsonPath);
-                Log("Item JSON file not found: " + jsonPath);
-                return;
+                MessageBox.Show($"{dataType} JSON file not found: {path}");
+                Log($"{dataType} JSON file not found: {path}");
+                return null;
             }
 
             string json;
             try
             {
-                json = File.ReadAllText(jsonPath);
-                Log("Item JSON file read successfully.");
+                json = File.ReadAllText(path);
+                Log($"{dataType} JSON file read successfully.");
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Failed to read Item JSON file: " + ex.Message);
-                Log("Failed to read Item JSON file: " + ex.Message);
-                return;
+                MessageBox.Show($"Failed to read {dataType} JSON file: {ex.Message}");
+                Log($"Failed to read {dataType} JSON file: {ex.Message}");
+                return null;
             }
 
             try
             {
-                itemData = JObject.Parse(json);
-                Log("Item JSON file parsed successfully.");
+                JObject data = JObject.Parse(json);
+                Log($"{dataType} JSON file parsed successfully.");
+                return data;
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Failed to parse Item JSON file: " + ex.Message);
-                Log("Failed to parse Item JSON file: " + ex.Message);
+                MessageBox.Show($"Failed to parse {dataType} JSON file: {ex.Message}");
+                Log($"Failed to parse {dataType} JSON file: {ex.Message}");
+                return null;
             }
         }
 
-        private void LoadModifierData()
-        {
-            Log("Loading modifier data.");
-            if (!File.Exists(modifierJsonPath))
-            {
-                MessageBox.Show("Modifier JSON file not found: " + modifierJsonPath);
-                Log("Modifier JSON file not found: " + modifierJsonPath);
-                return;
-            }
-
-            string json;
-            try
-            {
-                json = File.ReadAllText(modifierJsonPath);
-                Log("Modifier JSON file read successfully.");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Failed to read Modifier JSON file: " + ex.Message);
-                Log("Failed to read Modifier JSON file: " + ex.Message);
-                return;
-            }
-
-            try
-            {
-                modifierData = JObject.Parse(json);
-                Log("Modifier JSON file parsed successfully.");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Failed to parse Modifier JSON file: " + ex.Message);
-                Log("Failed to parse Modifier JSON file: " + ex.Message);
-            }
-        }
-
-        private void LoadModifierDetailData()
-        {
-            Log("Loading modifier detail data.");
-            if (!File.Exists(modifierDetailJsonPath))
-            {
-                MessageBox.Show("Modifier Detail JSON file not found: " + modifierDetailJsonPath);
-                Log("Modifier Detail JSON file not found: " + modifierDetailJsonPath);
-                return;
-            }
-
-            string json;
-            try
-            {
-                json = File.ReadAllText(modifierDetailJsonPath);
-                Log("Modifier Detail JSON file read successfully.");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Failed to read Modifier Detail JSON file: " + ex.Message);
-                Log("Failed to read Modifier Detail JSON file: " + ex.Message);
-                return;
-            }
-
-            try
-            {
-                modifierDetailData = JObject.Parse(json);
-                Log("Modifier Detail JSON file parsed successfully.");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Failed to parse Modifier Detail JSON file: " + ex.Message);
-                Log("Failed to parse Modifier Detail JSON file: " + ex.Message);
-            }
-        }
-
-        // UI Creation Methods
         private PictureBox CreateFormattedPictureBox(string name, Image image, string tag)
         {
-            Log("Creating formatted PictureBox for " + name);
+            Log($"Creating formatted PictureBox for {name}");
             return new PictureBox
             {
                 Name = name,
@@ -240,44 +149,18 @@ namespace Pictures
                 Image = image,
                 Margin = new Padding(10),
                 Padding = new Padding(0),
-                BorderStyle = BorderStyle.FixedSingle, // For debugging layout issues
+                BorderStyle = BorderStyle.FixedSingle,
                 Tag = tag
             };
         }
 
-        private void CreateCategoryPictureBoxesAndPanels(string jsonPath)
+        private void CreateCategoryPictureBoxesAndPanels()
         {
             Log("Creating category picture boxes and panels.");
-            if (!File.Exists(jsonPath))
-            {
-                MessageBox.Show("JSON file not found: " + jsonPath);
-                Log("JSON file not found: " + jsonPath);
-                return;
-            }
 
-            string json;
-            try
+            if (itemData == null)
             {
-                json = File.ReadAllText(jsonPath);
-                Log("JSON file read successfully.");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Failed to read JSON file: " + ex.Message);
-                Log("Failed to read JSON file: " + ex.Message);
-                return;
-            }
-
-            JObject data;
-            try
-            {
-                data = JObject.Parse(json);
-                Log("JSON file parsed successfully.");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Failed to parse JSON file: " + ex.Message);
-                Log("Failed to parse JSON file: " + ex.Message);
+                Log("Item data is not loaded.");
                 return;
             }
 
@@ -290,39 +173,18 @@ namespace Pictures
                 Dock = DockStyle.Fill
             };
 
-            modifierPanel = new TableLayoutPanel
-            {
-                AutoSize = true,
-                ColumnCount = 6,
-                RowCount = 0,
-                Padding = new Padding(10),
-                Dock = DockStyle.Bottom,
-                Visible = false
-            };
-
             this.Controls.Add(panel);
-            this.Controls.Add(modifierPanel);
 
-            categoryControls = new Dictionary<string, List<Control>>();
+            categoryControls = new Dictionary<string, List<FlowLayoutPanel>>();
             categoryPanels = new List<FlowLayoutPanel>();
 
-            foreach (JObject item in data["data"])
+            foreach (JObject item in itemData["data"])
             {
                 if (item.TryGetValue("menuitem", out JToken itemNameToken) &&
-                    item.TryGetValue("menucategory", out JToken categoryToken) &&
-                    item.TryGetValue("position", out JToken positionToken) &&
-                    item.TryGetValue("itemprice", out JToken itemPriceToken) &&
-                    item.TryGetValue("printto", out JToken printToToken) &&
-                    item.TryGetValue("foodstamp", out JToken foodStampToken) &&
-                    item.TryGetValue("taxable", out JToken taxableToken))
+                    item.TryGetValue("menucategory", out JToken categoryToken))
                 {
                     string itemName = itemNameToken.ToString();
                     string category = categoryToken.ToString();
-                    string position = positionToken.ToString();
-                    string itemPrice = itemPriceToken.ToString();
-                    string printTo = printToToken.ToString();
-                    string foodStamp = foodStampToken.ToString();
-                    string taxable = taxableToken.ToString();
 
                     string itemImagePath = GetImagePath($"{itemName}.bmp");
                     string categoryImagePath = GetImagePath($"{category}.bmp");
@@ -340,35 +202,13 @@ namespace Pictures
                         fullCategoryImagePath = Path.Combine(picturesFolder, "image not avail.bmp");
                     }
 
-                    Image itemImage;
-                    Image categoryImage;
+                    Image itemImage = LoadImage(fullItemImagePath, itemName);
+                    Image categoryImage = LoadImage(fullCategoryImagePath, category);
 
-                    try
-                    {
-                        itemImage = Image.FromFile(fullItemImagePath);
-                        Log("Loaded item image for " + itemName);
-                    }
-                    catch (Exception)
-                    {
-                        itemImage = Image.FromFile(Path.Combine(picturesFolder, "image not avail.bmp")); // Load fallback image
-                        Log("Failed to load item image for " + itemName + ". Loaded fallback image.");
-                    }
-
-                    try
-                    {
-                        categoryImage = Image.FromFile(fullCategoryImagePath);
-                        Log("Loaded category image for " + category);
-                    }
-                    catch (Exception)
-                    {
-                        categoryImage = Image.FromFile(Path.Combine(picturesFolder, "image not avail.bmp")); // Load fallback image
-                        Log("Failed to load category image for " + category + ". Loaded fallback image.");
-                    }
-
-                    string tag = $"{category}|{position}|{itemName}|{itemPrice}|{printTo}|{foodStamp}|{taxable}";
+                    string tag = $"{category}|{itemName}";
 
                     PictureBox pictureBox = CreateFormattedPictureBox(itemName, itemImage, itemName);
-                    pictureBox.Visible = false;
+                    pictureBox.Visible = true;
                     pictureBox.Click += new EventHandler(PictureBox_Click);
 
                     Label label = new Label
@@ -378,12 +218,23 @@ namespace Pictures
                         AutoSize = true,
                         Margin = new Padding(10),
                         TextAlign = ContentAlignment.MiddleCenter,
-                        Visible = false
+                        Visible = true
                     };
+
+                    FlowLayoutPanel flowPanel = new FlowLayoutPanel
+                    {
+                        FlowDirection = FlowDirection.TopDown,
+                        AutoSize = true,
+                        Margin = new Padding(10),
+                        Visible = true
+                    };
+
+                    flowPanel.Controls.Add(pictureBox);
+                    flowPanel.Controls.Add(label);
 
                     if (!categoryControls.ContainsKey(category))
                     {
-                        categoryControls[category] = new List<Control>();
+                        categoryControls[category] = new List<FlowLayoutPanel>();
                         PictureBox categoryPictureBox = CreateFormattedPictureBox(category, categoryImage, category);
                         categoryPictureBox.Visible = true;
                         categoryPictureBox.Click += (sender, e) => RefreshCategory(category);
@@ -400,7 +251,8 @@ namespace Pictures
                         {
                             FlowDirection = FlowDirection.TopDown,
                             AutoSize = true,
-                            Margin = new Padding(10)
+                            Margin = new Padding(10),
+                            Visible = true
                         };
 
                         categoryPanel.Controls.Add(categoryPictureBox);
@@ -410,8 +262,7 @@ namespace Pictures
                         categoryPanels.Add(categoryPanel);
                     }
 
-                    categoryControls[category].Add(pictureBox);
-                    categoryControls[category].Add(label);
+                    categoryControls[category].Add(flowPanel);
                 }
                 else
                 {
@@ -420,12 +271,9 @@ namespace Pictures
                 }
             }
 
-            currentState = State.Category;
-            UpdateNavigationButtons(); // Called here to initially set button visibility
             Log("Category picture boxes and panels created.");
         }
 
-        // Event Handlers
         private void PictureBox_Click(object sender, EventArgs e)
         {
             PictureBox pictureBox = sender as PictureBox;
@@ -433,58 +281,16 @@ namespace Pictures
             {
                 string itemTag = pictureBox.Tag.ToString();
                 Log($"Item {itemTag} clicked.");
+                navigationHistory.Push(previousCategory);
                 RefreshItem(itemTag);
+                UpdateNavigationButtons();
             }
         }
 
-        private void PreviousButton_Click(object sender, EventArgs e)
-        {
-            Log("Previous button clicked.");
-            switch (currentState)
-            {
-                case State.Item:
-                    CreateCategoryPictureBoxesAndPanels(jsonPath);
-                    break;
-                case State.Modifier:
-                    if (currentModifierIndex > 0)
-                    {
-                        currentModifierIndex--;
-                        DisplayModifierDetails(currentModifierCodes[currentModifierIndex]);
-                    }
-                    else
-                    {
-                        RefreshCategory(previousCategory);
-                    }
-                    break;
-                case State.FinalSale:
-                    currentModifierIndex = currentModifierCodes.Count - 1;
-                    DisplayModifierDetails(currentModifierCodes[currentModifierIndex]);
-                    currentState = State.Modifier;
-                    break;
-            }
-
-            UpdateNavigationButtons();
-        }
-
-        private void NextButton_Click(object sender, EventArgs e)
-        {
-            Log("Next button clicked.");
-            DisplayNextModifier();
-            UpdateNavigationButtons();
-        }
-
-        private void FinishButton_Click(object sender, EventArgs e)
-        {
-            Log("Finish button clicked.");
-            ClearSelectionAndReset();
-            RestoreInitialState();
-            UpdateNavigationButtons();
-        }
-
-        // State Transition Methods
         private void RefreshCategory(string category)
         {
             Log($"Refreshing category: {category}");
+
             panel.Controls.Clear();
             panel.ColumnStyles.Clear();
             panel.RowStyles.Clear();
@@ -495,22 +301,20 @@ namespace Pictures
 
             if (categoryControls.ContainsKey(category))
             {
-                foreach (var control in categoryControls[category])
+                foreach (var flowPanel in categoryControls[category])
                 {
                     if (column >= panel.ColumnCount)
                     {
                         column = 0;
                         row++;
                     }
-                    panel.Controls.Add(control, column, row);
-                    control.Visible = true;
+                    panel.Controls.Add(flowPanel, column, row);
+                    flowPanel.Visible = true; // Ensure visibility of the FlowLayoutPanel
                     column++;
                 }
             }
 
             previousCategory = category;
-            currentState = State.Item;
-            UpdateNavigationButtons();
             panel.Update(); // Explicitly update the layout
             Log($"Category refreshed: {category}");
         }
@@ -518,6 +322,7 @@ namespace Pictures
         private void RefreshItem(string itemTag)
         {
             Log($"Refreshing item: {itemTag}");
+
             panel.Controls.Clear();
             panel.ColumnStyles.Clear();
             panel.RowStyles.Clear();
@@ -542,6 +347,45 @@ namespace Pictures
             }
 
             panel.Update(); // Explicitly update the layout
+        }
+
+        private void NextButton_Click(object sender, EventArgs e)
+        {
+            // Implement the logic to navigate to the next screen
+            // For example, if navigating to the next category or item
+            string currentScreen = GetCurrentScreen(); // Implement this to get the current screen identifier
+            navigationHistory.Push(currentScreen);
+
+            // Navigate to the next screen
+            // Example: RefreshCategory(nextCategory);
+
+            UpdateNavigationButtons();
+        }
+
+        private void PreviousButton_Click(object sender, EventArgs e)
+        {
+            if (navigationHistory.Count > 0)
+            {
+                string previousScreen = navigationHistory.Pop();
+                // Navigate to the previous screen
+                // Example: RefreshCategory(previousScreen);
+
+                RefreshCategory(previousScreen);
+
+                UpdateNavigationButtons();
+            }
+        }
+
+        private void UpdateNavigationButtons()
+        {
+            previousButton.Enabled = navigationHistory.Count > 0;
+        }
+
+        private string GetCurrentScreen()
+        {
+            // Implement this method to return the current screen identifier
+            // For example, the current category or item being viewed
+            return previousCategory; // Or any other appropriate identifier
         }
 
         private void DisplayItemModifiers(string itemTag)
@@ -569,7 +413,6 @@ namespace Pictures
 
             currentModifierIndex = 0;
             previousCategory = item["menucategory"].ToString();
-            currentState = State.Modifier;
             DisplayNextModifier();
         }
 
@@ -578,7 +421,6 @@ namespace Pictures
             if (currentModifierIndex >= currentModifierCodes.Count)
             {
                 Log("No more modifiers to display.");
-                currentState = State.FinalSale; // Transition to final sale screen
                 DisplayFinalSaleScreen();
                 return;
             }
@@ -602,6 +444,7 @@ namespace Pictures
         private void DisplayModifierDetails(string modCode)
         {
             Log($"Displaying details for modifier: {modCode}");
+
             panel.Controls.Clear();
 
             var modifierDef = modifierData["data"]
@@ -625,7 +468,8 @@ namespace Pictures
                 string cost = detail["cost"]?.ToString() ?? "";
 
                 string imagePath = GetImagePath(detail["location"]?.ToString() ?? "image not avail.bmp");
-                string picturesFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
+                string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                string picturesFolder = Path.Combine(desktopPath, "KioskProject");
                 string fullImagePath = Path.Combine(picturesFolder, imagePath.ToLower());
 
                 if (!File.Exists(fullImagePath))
@@ -633,17 +477,7 @@ namespace Pictures
                     fullImagePath = Path.Combine(picturesFolder, "image not avail.bmp");
                 }
 
-                Image detailImage;
-                try
-                {
-                    detailImage = Image.FromFile(fullImagePath);
-                    Log($"Loaded image for modifier detail: {detailDesc}");
-                }
-                catch (Exception)
-                {
-                    detailImage = Image.FromFile(Path.Combine(picturesFolder, "image not avail.bmp")); // Load fallback image
-                    Log($"Failed to load image for modifier detail: {detailDesc}. Loaded fallback image.");
-                }
+                Image detailImage = LoadImage(fullImagePath, detailDesc);
 
                 PictureBox detailPictureBox = CreateFormattedPictureBox(detailDesc, detailImage, detailDesc);
 
@@ -682,13 +516,12 @@ namespace Pictures
 
                 UpdatePictureBoxSelectionState(detailPictureBox, modifierSelectionState[detailDesc], detailDesc, modCode);
             }
-
-            UpdateNavigationButtons();
         }
 
         private void DisplayFinalSaleScreen()
         {
             Log("Displaying final sale screen.");
+
             panel.Controls.Clear();
 
             Label finalMessage = new Label
@@ -708,10 +541,7 @@ namespace Pictures
             };
 
             finalPanel.Controls.Add(finalMessage);
-            finalPanel.Controls.Add(finishButton);
             panel.Controls.Add(finalPanel);
-
-            UpdateNavigationButtons();
         }
 
         private void ModifierDetailPictureBox_Click_One(object sender, EventArgs e, string modCode)
@@ -742,7 +572,6 @@ namespace Pictures
             }
         }
 
-        // Selection Methods
         private void ToggleModifierSelection(PictureBox pictureBox, string detailDesc, string modCode)
         {
             if (modifierSelectionState.ContainsKey(detailDesc))
@@ -781,7 +610,8 @@ namespace Pictures
                     else
                     {
                         string imagePath = GetImagePath($"{detailDesc}.bmp");
-                        string picturesFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
+                        string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                        string picturesFolder = Path.Combine(desktopPath, "KioskProject");
                         string fullImagePath = Path.Combine(picturesFolder, imagePath.ToLower());
 
                         if (File.Exists(fullImagePath))
@@ -827,33 +657,6 @@ namespace Pictures
             }
         }
 
-        private void UpdateNavigationButtons()
-        {
-            // Make the previous button appear after a category is selected
-            previousButton.Visible = currentState != State.Category;
-
-            // Make the next button appear when you are on modifiers
-            bool shouldShowNextButton = currentState == State.Modifier;
-
-            // Make the next button disappear when the modChoice for a modDef is type "one"
-            if (currentState == State.Modifier && currentModifierIndex > 0)
-            {
-                string modCode = currentModifierCodes[currentModifierIndex - 1];
-                var modifierDef = modifierData["data"]
-                    .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == modCode);
-
-                if (modifierDef != null && modifierDef["modchoice"]?.ToString() == "one")
-                {
-                    shouldShowNextButton = false;
-                }
-            }
-
-            nextButton.Visible = shouldShowNextButton;
-            finishButton.Visible = (currentState == State.FinalSale);
-            Log("Updated navigation buttons.");
-        }
-
-        // Utility Methods
         private string GetImagePath(string path)
         {
             string[] parts = path.Split(':');
@@ -875,34 +678,22 @@ namespace Pictures
             }
         }
 
-        private void ClearSelectionAndReset()
+        private Image LoadImage(string path, string description)
         {
-            Log("Clearing selection and resetting state.");
-            selectionListView.Items.Clear();
-            modifierSelectionState.Clear();
-            currentModifierCodes.Clear();
-            currentModifierIndex = 0;
-            previousCategory = null;
-            currentState = State.Category; // Reset state to Category
-        }
-
-        private void SaveInitialState()
-        {
-            Log("Saving initial state of the form.");
-            initialControls = new List<Control>();
-            foreach (Control control in this.Controls)
+            try
             {
-                initialControls.Add(control);
+                Image image = Image.FromFile(path);
+                Log($"Loaded image for {description}");
+                return image;
             }
-        }
-
-        private void RestoreInitialState()
-        {
-            Log("Restoring initial state of the form.");
-            this.Controls.Clear();
-            foreach (Control control in initialControls)
+            catch (Exception)
             {
-                this.Controls.Add(control);
+                string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+                string kioskProjectFolder = Path.Combine(desktopPath, "KioskProject");
+                string fallbackPath = Path.Combine(kioskProjectFolder, "image not avail.bmp");
+                Image fallbackImage = Image.FromFile(fallbackPath);
+                Log($"Failed to load image for {description}. Loaded fallback image.");
+                return fallbackImage;
             }
         }
     }
