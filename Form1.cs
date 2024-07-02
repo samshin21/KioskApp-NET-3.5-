@@ -368,6 +368,18 @@ namespace Pictures
 
         private void PreviousButton_Click(object sender, EventArgs e)
         {
+            if (currentScreenType == "Modifier" && currentModifierIndex == 1)
+            {
+                // Navigate back to the item screen
+                var itemScreen = navigationHistory.FirstOrDefault(entry => entry.ScreenType == "Item");
+                if (itemScreen != null)
+                {
+                    RefreshItem(itemScreen.ScreenData);
+                    UpdateNavigationButtons();
+                    return;
+                }
+            }
+
             if (navigationHistory.Count > 0)
             {
                 var previousScreen = navigationHistory.Pop();
@@ -385,15 +397,6 @@ namespace Pictures
                         var modCode = currentModifierCodes[currentModifierIndex - 1];
                         ResetModifierSelectionState(modCode);
                         DisplayModifierDetails(modCode);
-                    }
-                    else if (currentModifierIndex == 1)
-                    {
-                        var itemScreen = navigationHistory.Pop();
-                        if (itemScreen.ScreenType == "Item")
-                        {
-                            RefreshItem(itemScreen.ScreenData);
-                            currentScreenType = "Item";
-                        }
                     }
                 }
                 else if (currentScreenType == "Category")
