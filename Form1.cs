@@ -382,7 +382,9 @@ namespace Pictures
                     if (currentModifierIndex > 1)
                     {
                         currentModifierIndex--;
-                        DisplayModifierDetails(currentModifierCodes[currentModifierIndex - 1]);
+                        var modCode = currentModifierCodes[currentModifierIndex - 1];
+                        ResetModifierSelectionState(modCode);
+                        DisplayModifierDetails(modCode);
                     }
                     else if (currentModifierIndex == 1)
                     {
@@ -401,6 +403,34 @@ namespace Pictures
                 }
 
                 UpdateNavigationButtons();
+            }
+        }
+
+        private void ResetModifierSelectionState(string modCode)
+        {
+            var modifierDef = modifierData["data"]
+                .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == modCode);
+
+            if (modifierDef != null && modifierDef["modchoice"]?.ToString() == "one")
+            {
+                var modifierDetails = modifierDetailData["data"]
+                    .Where(d => d["modcode"] != null && d["modcode"].ToString() == modCode)
+                    .ToList();
+
+                foreach (var detail in modifierDetails)
+                {
+                    string detailDesc = detail["description"]?.ToString() ?? "Unknown Detail";
+                    if (modifierSelectionState.ContainsKey(detailDesc))
+                    {
+                        modifierSelectionState[detailDesc] = false;
+                    }
+
+                    ListViewItem itemToRemove = selectionListView.Items.Cast<ListViewItem>().FirstOrDefault(item => item.Text == detailDesc);
+                    if (itemToRemove != null)
+                    {
+                        selectionListView.Items.Remove(itemToRemove);
+                    }
+                }
             }
         }
 
