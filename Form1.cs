@@ -359,8 +359,10 @@ namespace Pictures
 
         private void NextButton_Click(object sender, EventArgs e)
         {
-            string currentScreen = GetCurrentScreen();
-            navigationHistory.Push(new NavigationEntry(currentScreen, "Next"));
+            if (currentScreenType == "Modifier")
+            {
+                DisplayNextModifier();
+            }
             UpdateNavigationButtons();
         }
 
@@ -431,6 +433,7 @@ namespace Pictures
         private void UpdateNavigationButtons()
         {
             previousButton.Enabled = navigationHistory.Count > 0 || currentScreenType == "Modifier";
+            nextButton.Enabled = currentScreenType == "Modifier" && currentModifierIndex < currentModifierCodes.Count;
         }
 
         private string GetCurrentScreen()
@@ -497,6 +500,7 @@ namespace Pictures
             if (modifierDef == null) return;
 
             string modChoiceType = modifierDef["modchoice"]?.ToString() ?? "one";
+            nextButton.Visible = modChoiceType == "upsale";
 
             var modifierDetails = modifierDetailData["data"]
                 .Where(d => d["modcode"] != null && d["modcode"].ToString() == modCode)
@@ -558,6 +562,7 @@ namespace Pictures
             }
 
             currentScreenType = "Modifier";
+            UpdateNavigationButtons();
         }
 
         private void DisplayFinalSaleScreen()
