@@ -11,7 +11,7 @@ namespace Pictures
     public partial class Form1 : Form
     {
         private TableLayoutPanel panel;
-        private Stack<string> navigationHistory;
+        private Stack<NavigationEntry> navigationHistory;
         private Button nextButton;
         private Button previousButton;
         private string jsonPath;
@@ -28,12 +28,13 @@ namespace Pictures
         private ListView selectionListView;
         private string storeName = "demostore1_123MainStr";
         private Dictionary<string, bool> modifierSelectionState;
+        private string currentScreenType;
 
         public Form1()
         {
             InitializeComponent();
             InitializeNavigationButtons();
-            navigationHistory = new Stack<string>();
+            navigationHistory = new Stack<NavigationEntry>();
             this.WindowState = FormWindowState.Maximized;
             string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
             jsonPath = Path.Combine(desktopPath, "formatted_items.txt");
@@ -58,7 +59,7 @@ namespace Pictures
             {
                 Text = "Previous",
                 Dock = DockStyle.Bottom,
-                Enabled = false // Initially disabled
+                Enabled = false
             };
             previousButton.Click += PreviousButton_Click;
 
@@ -68,13 +69,12 @@ namespace Pictures
 
         private void InitializeSelectionListView()
         {
-            Log("Initializing selection list view.");
             selectionListView = new ListView
             {
                 View = View.Details,
                 FullRowSelect = true,
                 GridLines = true,
-                Dock = DockStyle.Fill // Fill the remaining space
+                Dock = DockStyle.Fill
             };
 
             selectionListView.Columns.Add("Item", 150);
@@ -85,10 +85,10 @@ namespace Pictures
                 ColumnCount = 1,
                 RowCount = 1,
                 Dock = DockStyle.Right,
-                Width = 300 // Set the width to accommodate buttons and listview
+                Width = 300
             };
 
-            rightPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F)); // Make the ListView take the remaining space
+            rightPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             rightPanel.Controls.Add(selectionListView, 0, 0);
 
             this.Controls.Add(rightPanel);
@@ -103,44 +103,26 @@ namespace Pictures
 
         private JObject LoadJsonData(string path, string dataType)
         {
-            Log($"Loading {dataType} data.");
             if (!File.Exists(path))
             {
                 MessageBox.Show($"{dataType} JSON file not found: {path}");
-                Log($"{dataType} JSON file not found: {path}");
-                return null;
-            }
-
-            string json;
-            try
-            {
-                json = File.ReadAllText(path);
-                Log($"{dataType} JSON file read successfully.");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Failed to read {dataType} JSON file: {ex.Message}");
-                Log($"Failed to read {dataType} JSON file: {ex.Message}");
                 return null;
             }
 
             try
             {
-                JObject data = JObject.Parse(json);
-                Log($"{dataType} JSON file parsed successfully.");
-                return data;
+                string json = File.ReadAllText(path);
+                return JObject.Parse(json);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Failed to parse {dataType} JSON file: {ex.Message}");
-                Log($"Failed to parse {dataType} JSON file: {ex.Message}");
+                MessageBox.Show($"Failed to load {dataType} JSON file: {ex.Message}");
                 return null;
             }
         }
 
         private PictureBox CreateFormattedPictureBox(string name, Image image, string tag)
         {
-            Log($"Creating formatted PictureBox for {name}");
             return new PictureBox
             {
                 Name = name,
@@ -156,13 +138,7 @@ namespace Pictures
 
         private void CreateCategoryPictureBoxesAndPanels()
         {
-            Log("Creating category picture boxes and panels.");
-
-            if (itemData == null)
-            {
-                Log("Item data is not loaded.");
-                return;
-            }
+            if (itemData == null) return;
 
             panel = new TableLayoutPanel
             {
@@ -237,7 +213,12 @@ namespace Pictures
                         categoryControls[category] = new List<FlowLayoutPanel>();
                         PictureBox categoryPictureBox = CreateFormattedPictureBox(category, categoryImage, category);
                         categoryPictureBox.Visible = true;
-                        categoryPictureBox.Click += (sender, e) => RefreshCategory(category);
+                        categoryPictureBox.Click += (sender, e) =>
+                        {
+                            navigationHistory.Push(new NavigationEntry("Category", previousCategory));
+                            RefreshCategory(category);
+                            UpdateNavigationButtons();
+                        };
 
                         Label categoryLabel = new Label
                         {
@@ -267,11 +248,8 @@ namespace Pictures
                 else
                 {
                     MessageBox.Show($"Invalid item data in JSON file: {item}");
-                    Log($"Invalid item data in JSON file: {item}");
                 }
             }
-
-            Log("Category picture boxes and panels created.");
         }
 
         private void PictureBox_Click(object sender, EventArgs e)
@@ -280,8 +258,7 @@ namespace Pictures
             if (pictureBox != null)
             {
                 string itemTag = pictureBox.Tag.ToString();
-                Log($"Item {itemTag} clicked.");
-                navigationHistory.Push(previousCategory);
+                navigationHistory.Push(new NavigationEntry("Category", previousCategory));
                 RefreshItem(itemTag);
                 UpdateNavigationButtons();
             }
@@ -289,47 +266,40 @@ namespace Pictures
 
         private void RefreshCategory(string category)
         {
-            Log($"Refreshing category: {category}");
+            if (category == null || !categoryControls.ContainsKey(category)) return;
 
             panel.Controls.Clear();
             panel.ColumnStyles.Clear();
             panel.RowStyles.Clear();
 
-            panel.ColumnCount = 6; // Set this to the desired number of columns
+            panel.ColumnCount = 6;
             int column = 0;
             int row = 0;
 
-            if (categoryControls.ContainsKey(category))
+            foreach (var flowPanel in categoryControls[category])
             {
-                foreach (var flowPanel in categoryControls[category])
+                if (column >= panel.ColumnCount)
                 {
-                    if (column >= panel.ColumnCount)
-                    {
-                        column = 0;
-                        row++;
-                    }
-                    panel.Controls.Add(flowPanel, column, row);
-                    flowPanel.Visible = true; // Ensure visibility of the FlowLayoutPanel
-                    column++;
+                    column = 0;
+                    row++;
                 }
+                panel.Controls.Add(flowPanel, column, row);
+                flowPanel.Visible = true;
+                column++;
             }
 
             previousCategory = category;
-            panel.Update(); // Explicitly update the layout
-            Log($"Category refreshed: {category}");
+            currentScreenType = "Category";
+            panel.Update();
         }
 
         private void RefreshItem(string itemTag)
         {
-            Log($"Refreshing item: {itemTag}");
-
             panel.Controls.Clear();
             panel.ColumnStyles.Clear();
             panel.RowStyles.Clear();
 
-            panel.ColumnCount = 6; // Set this to the desired number of columns
-
-            DisplayItemModifiers(itemTag);
+            panel.ColumnCount = 6;
 
             var item = itemData["data"]
                 .FirstOrDefault(m => m["menuitem"] != null && m["menuitem"].ToString() == itemTag);
@@ -339,26 +309,58 @@ namespace Pictures
                 string itemName = item["menuitem"].ToString();
                 string itemPrice = item["itemprice"].ToString();
 
+                string itemImagePath = GetImagePath($"{itemName}.bmp");
+                string picturesFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
+                string fullItemImagePath = Path.Combine(picturesFolder, itemImagePath.ToLower());
+
+                if (!File.Exists(fullItemImagePath))
+                {
+                    fullItemImagePath = Path.Combine(picturesFolder, "image not avail.bmp");
+                }
+
+                Image itemImage = LoadImage(fullItemImagePath, itemName);
+
+                PictureBox itemPictureBox = CreateFormattedPictureBox(itemName, itemImage, itemName);
+                itemPictureBox.Visible = true;
+
+                Label itemLabel = new Label
+                {
+                    Name = itemName,
+                    Text = $"{itemName}",
+                    AutoSize = true,
+                    Margin = new Padding(10),
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    Visible = true
+                };
+
+                FlowLayoutPanel itemPanel = new FlowLayoutPanel
+                {
+                    FlowDirection = FlowDirection.TopDown,
+                    AutoSize = true,
+                    Margin = new Padding(10),
+                    Visible = true
+                };
+
+                itemPanel.Controls.Add(itemPictureBox);
+                itemPanel.Controls.Add(itemLabel);
+
+                panel.Controls.Add(itemPanel, 0, 0);
+
                 ListViewItem listViewItem = new ListViewItem(itemName);
                 listViewItem.SubItems.Add(itemPrice);
 
                 selectionListView.Items.Add(listViewItem);
-                Log($"Added item to selection: {itemName} - {itemPrice}");
             }
 
-            panel.Update(); // Explicitly update the layout
+            DisplayItemModifiers(itemTag);
+            currentScreenType = "Item";
+            panel.Update();
         }
 
         private void NextButton_Click(object sender, EventArgs e)
         {
-            // Implement the logic to navigate to the next screen
-            // For example, if navigating to the next category or item
-            string currentScreen = GetCurrentScreen(); // Implement this to get the current screen identifier
-            navigationHistory.Push(currentScreen);
-
-            // Navigate to the next screen
-            // Example: RefreshCategory(nextCategory);
-
+            string currentScreen = GetCurrentScreen();
+            navigationHistory.Push(new NavigationEntry(currentScreen, "Next"));
             UpdateNavigationButtons();
         }
 
@@ -366,39 +368,82 @@ namespace Pictures
         {
             if (navigationHistory.Count > 0)
             {
-                string previousScreen = navigationHistory.Pop();
-                // Navigate to the previous screen
-                // Example: RefreshCategory(previousScreen);
+                var previousScreen = navigationHistory.Pop();
 
-                RefreshCategory(previousScreen);
+                if (currentScreenType == "Item")
+                {
+                    RefreshCategory(previousScreen.ScreenData);
+                    currentScreenType = "Category";
+                }
+                else if (currentScreenType == "Modifier")
+                {
+                    if (currentModifierIndex > 1)
+                    {
+                        currentModifierIndex--;
+                        DisplayModifierDetails(currentModifierCodes[currentModifierIndex - 1]);
+                    }
+                    else if (currentModifierIndex == 1)
+                    {
+                        var itemScreen = navigationHistory.Pop();
+                        if (itemScreen.ScreenType == "Item")
+                        {
+                            RefreshItem(itemScreen.ScreenData);
+                            currentScreenType = "Item";
+                        }
+                    }
+                }
+                else if (currentScreenType == "Category")
+                {
+                    DisplayMainCategory();
+                    currentScreenType = "MainCategory";
+                }
 
                 UpdateNavigationButtons();
             }
         }
 
+        private void DisplayMainCategory()
+        {
+            panel.Controls.Clear();
+            panel.ColumnStyles.Clear();
+            panel.RowStyles.Clear();
+
+            panel.ColumnCount = 6;
+            int column = 0;
+            int row = 0;
+
+            foreach (var categoryPanel in categoryPanels)
+            {
+                if (column >= panel.ColumnCount)
+                {
+                    column = 0;
+                    row++;
+                }
+                panel.Controls.Add(categoryPanel, column, row);
+                categoryPanel.Visible = true;
+                column++;
+            }
+
+            currentScreenType = "MainCategory";
+            panel.Update();
+        }
+
         private void UpdateNavigationButtons()
         {
-            previousButton.Enabled = navigationHistory.Count > 0;
+            previousButton.Enabled = navigationHistory.Count > 0 || currentScreenType == "Modifier";
         }
 
         private string GetCurrentScreen()
         {
-            // Implement this method to return the current screen identifier
-            // For example, the current category or item being viewed
-            return previousCategory; // Or any other appropriate identifier
+            return previousCategory;
         }
 
         private void DisplayItemModifiers(string itemTag)
         {
-            Log($"Displaying modifiers for item: {itemTag}");
             var item = itemData["data"]
                 .FirstOrDefault(m => m["menuitem"] != null && m["menuitem"].ToString() == itemTag);
 
-            if (item == null)
-            {
-                Log($"No item found for tag: {itemTag}");
-                return;
-            }
+            if (item == null) return;
 
             string[] modifierSections = { "aa", "bb", "cc", "dd", "ee", "ff", "gg", "hh", "ii", "jj", "kk", "ll" };
             currentModifierCodes = new List<string>();
@@ -413,6 +458,7 @@ namespace Pictures
 
             currentModifierIndex = 0;
             previousCategory = item["menucategory"].ToString();
+            navigationHistory.Push(new NavigationEntry("Item", itemTag));
             DisplayNextModifier();
         }
 
@@ -420,7 +466,6 @@ namespace Pictures
         {
             if (currentModifierIndex >= currentModifierCodes.Count)
             {
-                Log("No more modifiers to display.");
                 DisplayFinalSaleScreen();
                 return;
             }
@@ -433,6 +478,7 @@ namespace Pictures
 
             if (modifierDef != null)
             {
+                navigationHistory.Push(new NavigationEntry("Modifier", modCode));
                 DisplayModifierDetails(modCode);
             }
             else
@@ -443,18 +489,12 @@ namespace Pictures
 
         private void DisplayModifierDetails(string modCode)
         {
-            Log($"Displaying details for modifier: {modCode}");
-
             panel.Controls.Clear();
 
             var modifierDef = modifierData["data"]
                 .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == modCode);
 
-            if (modifierDef == null)
-            {
-                Log($"No modifier definition found for code: {modCode}");
-                return;
-            }
+            if (modifierDef == null) return;
 
             string modChoiceType = modifierDef["modchoice"]?.ToString() ?? "one";
 
@@ -516,12 +556,12 @@ namespace Pictures
 
                 UpdatePictureBoxSelectionState(detailPictureBox, modifierSelectionState[detailDesc], detailDesc, modCode);
             }
+
+            currentScreenType = "Modifier";
         }
 
         private void DisplayFinalSaleScreen()
         {
-            Log("Displaying final sale screen.");
-
             panel.Controls.Clear();
 
             Label finalMessage = new Label
@@ -542,6 +582,8 @@ namespace Pictures
 
             finalPanel.Controls.Add(finalMessage);
             panel.Controls.Add(finalPanel);
+
+            currentScreenType = "FinalSale";
         }
 
         private void ModifierDetailPictureBox_Click_One(object sender, EventArgs e, string modCode)
@@ -550,13 +592,10 @@ namespace Pictures
             if (pictureBox != null)
             {
                 string detailDesc = pictureBox.Tag.ToString();
-                Log($"Modifier detail clicked (one): {detailDesc}");
-
                 if (!modifierSelectionState.ContainsKey(detailDesc) || !modifierSelectionState[detailDesc])
                 {
                     ToggleModifierSelection(pictureBox, detailDesc, modCode);
                 }
-
                 DisplayNextModifier();
             }
         }
@@ -567,7 +606,6 @@ namespace Pictures
             if (pictureBox != null)
             {
                 string detailDesc = pictureBox.Tag.ToString();
-                Log($"Modifier detail clicked (upsale): {detailDesc}");
                 ToggleModifierSelection(pictureBox, detailDesc, modCode);
             }
         }
@@ -577,8 +615,6 @@ namespace Pictures
             if (modifierSelectionState.ContainsKey(detailDesc))
             {
                 modifierSelectionState[detailDesc] = !modifierSelectionState[detailDesc];
-                string action = modifierSelectionState[detailDesc] ? "Selecting" : "Deselecting";
-                Log($"{action} modifier detail: {detailDesc}");
                 UpdatePictureBoxSelectionState(pictureBox, modifierSelectionState[detailDesc], detailDesc, modCode);
                 UpdateSelectionListView(detailDesc, modifierSelectionState[detailDesc], modCode);
             }
@@ -605,7 +641,6 @@ namespace Pictures
                             }
                         }
                         pictureBox.Image = overlayImage;
-                        Log($"Applied overlay to modifier detail image: {detailDesc}");
                     }
                     else
                     {
@@ -620,15 +655,13 @@ namespace Pictures
                         }
                         else
                         {
-                            pictureBox.Image = Image.FromFile(Path.Combine(picturesFolder, "image not avail.bmp")); // Load fallback image
+                            pictureBox.Image = Image.FromFile(Path.Combine(picturesFolder, "image not avail.bmp"));
                         }
-                        Log($"Restored original image for modifier detail: {detailDesc}");
                     }
                 }
                 else
                 {
                     pictureBox.BackColor = isSelected ? Color.Green : Color.Transparent;
-                    Log($"{(isSelected ? "Selected" : "Deselected")} modifier detail: {detailDesc}");
                 }
             }
         }
@@ -644,7 +677,6 @@ namespace Pictures
                 ListViewItem listViewItem = new ListViewItem(detailDesc);
                 listViewItem.SubItems.Add(cost);
                 selectionListView.Items.Add(listViewItem);
-                Log($"Added modifier detail to selection: {detailDesc}");
             }
             else
             {
@@ -652,7 +684,6 @@ namespace Pictures
                 if (itemToRemove != null)
                 {
                     selectionListView.Items.Remove(itemToRemove);
-                    Log($"Removed modifier detail from selection: {detailDesc}");
                 }
             }
         }
@@ -683,7 +714,6 @@ namespace Pictures
             try
             {
                 Image image = Image.FromFile(path);
-                Log($"Loaded image for {description}");
                 return image;
             }
             catch (Exception)
@@ -691,10 +721,20 @@ namespace Pictures
                 string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
                 string kioskProjectFolder = Path.Combine(desktopPath, "KioskProject");
                 string fallbackPath = Path.Combine(kioskProjectFolder, "image not avail.bmp");
-                Image fallbackImage = Image.FromFile(fallbackPath);
-                Log($"Failed to load image for {description}. Loaded fallback image.");
-                return fallbackImage;
+                return Image.FromFile(fallbackPath);
             }
+        }
+    }
+
+    public class NavigationEntry
+    {
+        public string ScreenType { get; set; }
+        public string ScreenData { get; set; }
+
+        public NavigationEntry(string screenType, string screenData)
+        {
+            ScreenType = screenType;
+            ScreenData = screenData;
         }
     }
 }
