@@ -14,6 +14,7 @@ namespace Pictures
         private Stack<NavigationEntry> navigationHistory;
         private Button nextButton;
         private Button previousButton;
+        private Button startOverButton;
         private string jsonPath;
         private string modifierJsonPath;
         private string modifierDetailJsonPath;
@@ -51,7 +52,8 @@ namespace Pictures
             nextButton = new Button
             {
                 Text = "Next",
-                Dock = DockStyle.Bottom
+                Dock = DockStyle.Bottom,
+                Visible = false
             };
             nextButton.Click += NextButton_Click;
 
@@ -59,12 +61,20 @@ namespace Pictures
             {
                 Text = "Previous",
                 Dock = DockStyle.Bottom,
-                Enabled = false
+                Visible = false
             };
             previousButton.Click += PreviousButton_Click;
 
+            startOverButton = new Button
+            {
+                Text = "Start Over",
+                Dock = DockStyle.Bottom
+            };
+            startOverButton.Click += StartOverButton_Click;
+
             this.Controls.Add(nextButton);
             this.Controls.Add(previousButton);
+            this.Controls.Add(startOverButton);
         }
 
         private void InitializeSelectionListView()
@@ -409,6 +419,14 @@ namespace Pictures
             }
         }
 
+        private void StartOverButton_Click(object sender, EventArgs e)
+        {
+            navigationHistory.Clear();
+            selectionListView.Items.Clear();
+            DisplayMainCategory();
+            UpdateNavigationButtons();
+        }
+
         private void ResetModifierSelectionState(string modCode)
         {
             var modifierDef = modifierData["data"]
@@ -465,8 +483,11 @@ namespace Pictures
 
         private void UpdateNavigationButtons()
         {
-            previousButton.Enabled = navigationHistory.Count > 0 || currentScreenType == "Modifier";
-            nextButton.Enabled = currentScreenType == "Modifier" && currentModifierIndex < currentModifierCodes.Count;
+            previousButton.Enabled = currentScreenType == "Modifier" && currentModifierIndex > 1;
+            nextButton.Enabled = currentScreenType == "Modifier" && currentModifierIndex < currentModifierCodes.Count &&
+                                 modifierData["data"]
+                                     .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == currentModifierCodes[currentModifierIndex - 1])?
+                                     ["modchoice"]?.ToString() == "upsale";
         }
 
         private string GetCurrentScreen()
@@ -534,6 +555,7 @@ namespace Pictures
 
             string modChoiceType = modifierDef["modchoice"]?.ToString() ?? "one";
             nextButton.Visible = modChoiceType == "upsale";
+            previousButton.Visible = currentModifierIndex > 1;
 
             var modifierDetails = modifierDetailData["data"]
                 .Where(d => d["modcode"] != null && d["modcode"].ToString() == modCode)
