@@ -52,7 +52,7 @@ namespace Pictures
             nextButton = new Button
             {
                 Text = "Next",
-                Dock = DockStyle.Bottom,
+                Size = new Size(100, 50),
                 Visible = false
             };
             nextButton.Click += NextButton_Click;
@@ -60,7 +60,7 @@ namespace Pictures
             previousButton = new Button
             {
                 Text = "Previous",
-                Dock = DockStyle.Bottom,
+                Size = new Size(100, 50),
                 Visible = false
             };
             previousButton.Click += PreviousButton_Click;
@@ -68,13 +68,36 @@ namespace Pictures
             startOverButton = new Button
             {
                 Text = "Start Over",
-                Dock = DockStyle.Bottom
+                Size = new Size(100, 50)
             };
             startOverButton.Click += StartOverButton_Click;
 
             this.Controls.Add(nextButton);
             this.Controls.Add(previousButton);
             this.Controls.Add(startOverButton);
+
+            int buttonSpacing = 10;
+            int totalButtonWidth = nextButton.Width + previousButton.Width + startOverButton.Width + buttonSpacing * 2;
+            int startX = (this.ClientSize.Width - totalButtonWidth) / 2;
+            int startY = this.ClientSize.Height - startOverButton.Height - 10;
+
+            startOverButton.Location = new Point(startX, startY);
+            previousButton.Location = new Point(startOverButton.Location.X + startOverButton.Width + buttonSpacing, startY);
+            nextButton.Location = new Point(previousButton.Location.X + previousButton.Width + buttonSpacing, startY);
+
+            this.Resize += (sender, e) => PositionButtons();
+        }
+
+        private void PositionButtons()
+        {
+            int buttonSpacing = 10;
+            int totalButtonWidth = nextButton.Width + previousButton.Width + startOverButton.Width + buttonSpacing * 2;
+            int startX = (this.ClientSize.Width - totalButtonWidth) / 2;
+            int startY = this.ClientSize.Height - startOverButton.Height - 10;
+
+            startOverButton.Location = new Point(startX, startY);
+            previousButton.Location = new Point(startOverButton.Location.X + startOverButton.Width + buttonSpacing, startY);
+            nextButton.Location = new Point(previousButton.Location.X + previousButton.Width + buttonSpacing, startY);
         }
 
         private void InitializeSelectionListView()
@@ -423,6 +446,7 @@ namespace Pictures
         {
             navigationHistory.Clear();
             selectionListView.Items.Clear();
+            modifierSelectionState.Clear();
             DisplayMainCategory();
             UpdateNavigationButtons();
         }
@@ -483,8 +507,8 @@ namespace Pictures
 
         private void UpdateNavigationButtons()
         {
-            previousButton.Enabled = currentScreenType == "Modifier" && currentModifierIndex > 1;
-            nextButton.Enabled = currentScreenType == "Modifier" && currentModifierIndex < currentModifierCodes.Count &&
+            previousButton.Visible = currentScreenType == "Modifier" && currentModifierIndex > 1;
+            nextButton.Visible = currentScreenType == "Modifier" && currentModifierIndex < currentModifierCodes.Count &&
                                  modifierData["data"]
                                      .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == currentModifierCodes[currentModifierIndex - 1])?
                                      ["modchoice"]?.ToString() == "upsale";
