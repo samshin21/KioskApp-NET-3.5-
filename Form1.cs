@@ -48,6 +48,9 @@ namespace Pictures
 
             // Set the background color to #fbe8af
             this.BackColor = ColorTranslator.FromHtml("#fbe8af");
+
+            // Log the items and modifier definitions
+            LogItemsAndModifierDefs();
         }
 
         private void InitializeNavigationButtons()
@@ -433,18 +436,6 @@ namespace Pictures
 
         private void PreviousButton_Click(object sender, EventArgs e)
         {
-            // Navigate back to the item screen if we are on the first modifier
-            if (currentScreenType == "Modifier" && currentModifierIndex == 1)
-            {
-                var itemScreen = navigationHistory.FirstOrDefault(entry => entry.ScreenType == "Item");
-                if (itemScreen != null)
-                {
-                    RefreshItem(itemScreen.ScreenData);
-                    UpdateNavigationButtons();
-                    return;
-                }
-            }
-
             // Navigate back to the last modifier if we are on the Final Sale screen
             if (currentScreenType == "FinalSale")
             {
@@ -609,6 +600,19 @@ namespace Pictures
             previousCategory = item["menucategory"].ToString();
             navigationHistory.Push(new NavigationEntry("Item", itemTag));
 
+            // Check if there is only one modifier and handle it
+            if (currentModifierCodes.Count == 1)
+            {
+                string modCode = currentModifierCodes[0];
+                var modifierDef = modifierData["data"]
+                    .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == modCode);
+
+                if (modifierDef != null && modifierDef["modchoice"]?.ToString() == "upsale")
+                {
+                    nextButton.Visible = true;
+                }
+            }
+
             // Display the first modifier
             DisplayNextModifier();
         }
@@ -635,6 +639,12 @@ namespace Pictures
                 // Push the current modifier to the navigation history and display its details
                 navigationHistory.Push(new NavigationEntry("Modifier", modCode));
                 DisplayModifierDetails(modCode);
+
+                // Make sure to show the Next button if the modChoice type is upsale
+                if (modifierDef["modchoice"]?.ToString() == "upsale")
+                {
+                    nextButton.Visible = true;
+                }
             }
             else
             {
@@ -767,10 +777,7 @@ namespace Pictures
             if (pictureBox != null)
             {
                 string detailDesc = pictureBox.Tag.ToString();
-                if (!modifierSelectionState.ContainsKey(detailDesc) || !modifierSelectionState[detailDesc])
-                {
-                    ToggleModifierSelection(pictureBox, detailDesc, modCode);
-                }
+                ToggleModifierSelection(pictureBox, detailDesc, modCode);
                 DisplayNextModifier();
             }
         }
@@ -883,6 +890,28 @@ namespace Pictures
                 string kioskProjectFolder = Path.Combine(desktopPath, "KioskProject");
                 string fallbackPath = Path.Combine(kioskProjectFolder, "image not avail.bmp");
                 return Image.FromFile(fallbackPath);
+            }
+        }
+
+        private void LogItemsAndModifierDefs()
+        {
+            // Log all items
+            Console.WriteLine("Items:");
+            foreach (JObject item in itemData["data"])
+            {
+                string itemName = item["menuitem"]?.ToString() ?? "Unknown Item";
+                string itemPrice = item["itemprice"]?.ToString() ?? "Unknown Price";
+                string itemCategory = item["menucategory"]?.ToString() ?? "Unknown Category";
+                Console.WriteLine($"Name: {itemName}, Price: {itemPrice}, Category: {itemCategory}");
+            }
+
+            // Log all modifier definitions
+            Console.WriteLine("\nModifier Definitions:");
+            foreach (JObject modifierDef in modifierData["data"])
+            {
+                string modCode = modifierDef["modcode"]?.ToString() ?? "Unknown ModCode";
+                string modChoice = modifierDef["modchoice"]?.ToString() ?? "Unknown ModChoice";
+                Console.WriteLine($"ModCode: {modCode}, ModChoice: {modChoice}");
             }
         }
     }
