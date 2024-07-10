@@ -45,86 +45,101 @@ namespace Pictures
             LoadData();
             CreateCategoryPictureBoxesAndPanels();
             modifierSelectionState = new Dictionary<string, bool>();
+
+            // Set the background color to #fbe8af
+            this.BackColor = ColorTranslator.FromHtml("#fbe8af");
         }
 
         private void InitializeNavigationButtons()
         {
-            nextButton = new Button
-            {
-                Text = "Next",
-                Size = new Size(100, 50),
-                Visible = false
-            };
-            nextButton.Click += NextButton_Click;
+            // Button dimensions
+            int buttonWidth = 150;
+            int buttonHeight = 100;
+            int buttonSpacing = 10;
 
-            previousButton = new Button
-            {
-                Text = "Previous",
-                Size = new Size(100, 50),
-                Visible = false
-            };
-            previousButton.Click += PreviousButton_Click;
+            // Button design
+            Color buttonBackColor = Color.Black; // Set background color to black
+            Color buttonForeColor = Color.White; // Set font color to white
+            Font buttonFont = new Font("Calibri", 12, FontStyle.Bold);
 
+            // Initialize the "Start Over" button
             startOverButton = new Button
             {
                 Text = "Start Over",
-                Size = new Size(100, 50)
+                Size = new Size(buttonWidth, buttonHeight),
+                BackColor = buttonBackColor,
+                ForeColor = buttonForeColor,
+                Font = buttonFont
             };
             startOverButton.Click += StartOverButton_Click;
-
-            this.Controls.Add(nextButton);
-            this.Controls.Add(previousButton);
             this.Controls.Add(startOverButton);
 
-            int buttonSpacing = 10;
-            int totalButtonWidth = nextButton.Width + previousButton.Width + startOverButton.Width + buttonSpacing * 2;
-            int startX = (this.ClientSize.Width - totalButtonWidth) / 2;
-            int startY = this.ClientSize.Height - startOverButton.Height - 10;
+            // Initialize the "Previous" button
+            previousButton = new Button
+            {
+                Text = "Previous",
+                Size = new Size(buttonWidth, buttonHeight),
+                BackColor = buttonBackColor,
+                ForeColor = buttonForeColor,
+                Font = buttonFont,
+                Visible = false
+            };
+            previousButton.Click += PreviousButton_Click;
+            this.Controls.Add(previousButton);
 
-            startOverButton.Location = new Point(startX, startY);
-            previousButton.Location = new Point(startOverButton.Location.X + startOverButton.Width + buttonSpacing, startY);
-            nextButton.Location = new Point(previousButton.Location.X + previousButton.Width + buttonSpacing, startY);
+            // Initialize the "Next" button
+            nextButton = new Button
+            {
+                Text = "Next",
+                Size = new Size(buttonWidth, buttonHeight),
+                BackColor = buttonBackColor,
+                ForeColor = buttonForeColor,
+                Font = buttonFont,
+                Visible = false
+            };
+            nextButton.Click += NextButton_Click;
+            this.Controls.Add(nextButton);
 
-            this.Resize += (sender, e) => PositionButtons();
+            // Position buttons on the form
+            PositionButtons(buttonWidth, buttonHeight, buttonSpacing);
+
+            // Reposition buttons on form resize
+            this.Resize += (sender, e) => PositionButtons(buttonWidth, buttonHeight, buttonSpacing);
         }
 
-        private void PositionButtons()
+        // Method to position the buttons on the form
+        private void PositionButtons(int buttonWidth, int buttonHeight, int buttonSpacing)
         {
-            int buttonSpacing = 10;
-            int totalButtonWidth = nextButton.Width + previousButton.Width + startOverButton.Width + buttonSpacing * 2;
-            int startX = (this.ClientSize.Width - totalButtonWidth) / 2;
-            int startY = this.ClientSize.Height - startOverButton.Height - 10;
+            // Calculate total width of all buttons including spacing
+            int totalButtonWidth = 3 * buttonWidth + 2 * buttonSpacing;
+            // Calculate the starting X position for centering the buttons
+            int startX = 20;
+            // Set the Y position for the buttons at the bottom of the form
+            int startY = 750;
 
+            // Set locations for each button
             startOverButton.Location = new Point(startX, startY);
-            previousButton.Location = new Point(startOverButton.Location.X + startOverButton.Width + buttonSpacing, startY);
-            nextButton.Location = new Point(previousButton.Location.X + previousButton.Width + buttonSpacing, startY);
+            previousButton.Location = new Point(startX + buttonWidth + buttonSpacing, startY);
+            nextButton.Location = new Point(startX + 2 * (buttonWidth + buttonSpacing), startY);
         }
 
         private void InitializeSelectionListView()
         {
+            // Initialize the ListView
             selectionListView = new ListView
             {
                 View = View.Details,
                 FullRowSelect = true,
                 GridLines = true,
-                Dock = DockStyle.Fill
+                Size = new Size(300, 650), // Set the size of the ListView
+                Location = new Point(1350, 20) // Position it 10 pixels from the right edge and top
             };
-
+            selectionListView.Columns.Add("Qty", 50);
             selectionListView.Columns.Add("Item", 150);
-            selectionListView.Columns.Add("Price", 150);
+            selectionListView.Columns.Add("Price", 100);
 
-            TableLayoutPanel rightPanel = new TableLayoutPanel
-            {
-                ColumnCount = 1,
-                RowCount = 1,
-                Dock = DockStyle.Right,
-                Width = 300
-            };
-
-            rightPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            rightPanel.Controls.Add(selectionListView, 0, 0);
-
-            this.Controls.Add(rightPanel);
+            // Add the ListView to the form's controls
+            this.Controls.Add(selectionListView);
         }
 
         private void LoadData()
@@ -162,75 +177,106 @@ namespace Pictures
                 Size = new Size(158, 118),
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 Image = image,
-                Margin = new Padding(10),
+                Margin = new Padding(0, 0, 0, 5),
                 Padding = new Padding(0),
-                BorderStyle = BorderStyle.FixedSingle,
                 Tag = tag
             };
         }
 
         private void CreateCategoryPictureBoxesAndPanels()
         {
+            // Check if item data is loaded
             if (itemData == null) return;
 
+            // Initialize TableLayoutPanel
             panel = new TableLayoutPanel
             {
                 AutoSize = true,
-                ColumnCount = 6,
-                RowCount = 0,
+                ColumnCount = 7,
                 Padding = new Padding(10),
                 Dock = DockStyle.Fill
             };
-
             this.Controls.Add(panel);
 
+            // Initialize dictionaries and lists to hold category controls and panels
             categoryControls = new Dictionary<string, List<FlowLayoutPanel>>();
             categoryPanels = new List<FlowLayoutPanel>();
 
+            // Loop through each item in the item data
             foreach (JObject item in itemData["data"])
             {
-                if (item.TryGetValue("menuitem", out JToken itemNameToken) &&
-                    item.TryGetValue("menucategory", out JToken categoryToken))
+                // Check for required fields in the item
+                if (!item.TryGetValue("menuitem", out JToken itemNameToken) ||
+                    !item.TryGetValue("menucategory", out JToken categoryToken))
                 {
-                    string itemName = itemNameToken.ToString();
-                    string category = categoryToken.ToString();
+                    MessageBox.Show($"Invalid item data in JSON file: {item}");
+                    continue; // Skip to the next item if data is invalid
+                }
 
-                    string itemImagePath = GetImagePath($"{itemName}.bmp");
-                    string categoryImagePath = GetImagePath($"{category}.bmp");
-                    string picturesFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
-                    string fullItemImagePath = Path.Combine(picturesFolder, itemImagePath.ToLower());
-                    string fullCategoryImagePath = Path.Combine(picturesFolder, categoryImagePath.ToLower());
+                // Extract item name and category from JSON data
+                string itemName = itemNameToken.ToString();
+                string category = categoryToken.ToString();
 
-                    if (!File.Exists(fullItemImagePath))
+                // Define the folder path for images
+                string picturesFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
+
+                // Load item and category images
+                Image itemImage = LoadImage(GetImagePath($"{itemName}.bmp", picturesFolder), itemName);
+                Image categoryImage = LoadImage(GetImagePath($"{category}.bmp", picturesFolder), category);
+
+                // Create picture box for the item
+                PictureBox pictureBox = CreateFormattedPictureBox(itemName, itemImage, itemName);
+                pictureBox.Visible = true;
+                pictureBox.Click += PictureBox_Click;
+
+                // Create label for the item
+                Label label = new Label
+                {
+                    Name = itemName,
+                    Text = itemName,
+                    AutoSize = true,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    Visible = true,
+                    Margin = new Padding(0, 5, 0, 0)
+                };
+
+                // Create flow layout panel for the item
+                FlowLayoutPanel flowPanel = new FlowLayoutPanel
+                {
+                    FlowDirection = FlowDirection.TopDown,
+                    AutoSize = true,
+                    Margin = new Padding(10),
+                    Visible = true
+                };
+                flowPanel.Controls.Add(pictureBox);
+                flowPanel.Controls.Add(label);
+
+                // Check if the category already exists in the dictionary
+                if (!categoryControls.ContainsKey(category))
+                {
+                    categoryControls[category] = new List<FlowLayoutPanel>();
+
+                    // Create picture box for the category
+                    PictureBox categoryPictureBox = CreateFormattedPictureBox(category, categoryImage, category);
+                    categoryPictureBox.Visible = true;
+                    categoryPictureBox.Click += (sender, e) =>
                     {
-                        fullItemImagePath = Path.Combine(picturesFolder, "image not avail.bmp");
-                    }
-
-                    if (!File.Exists(fullCategoryImagePath))
-                    {
-                        fullCategoryImagePath = Path.Combine(picturesFolder, "image not avail.bmp");
-                    }
-
-                    Image itemImage = LoadImage(fullItemImagePath, itemName);
-                    Image categoryImage = LoadImage(fullCategoryImagePath, category);
-
-                    string tag = $"{category}|{itemName}";
-
-                    PictureBox pictureBox = CreateFormattedPictureBox(itemName, itemImage, itemName);
-                    pictureBox.Visible = true;
-                    pictureBox.Click += new EventHandler(PictureBox_Click);
-
-                    Label label = new Label
-                    {
-                        Name = itemName,
-                        Text = $"{itemName}",
-                        AutoSize = true,
-                        Margin = new Padding(10),
-                        TextAlign = ContentAlignment.MiddleCenter,
-                        Visible = true
+                        navigationHistory.Push(new NavigationEntry("Category", previousCategory));
+                        RefreshCategory(category);
+                        UpdateNavigationButtons();
                     };
 
-                    FlowLayoutPanel flowPanel = new FlowLayoutPanel
+                    // Create label for the category
+                    Label categoryLabel = new Label
+                    {
+                        Text = category,
+                        AutoSize = true,
+                        TextAlign = ContentAlignment.MiddleCenter,
+                        Margin = new Padding(0, 5, 0, 0)
+                    };
+
+                    // Create flow layout panel for the category
+                    FlowLayoutPanel categoryPanel = new FlowLayoutPanel
                     {
                         FlowDirection = FlowDirection.TopDown,
                         AutoSize = true,
@@ -238,51 +284,23 @@ namespace Pictures
                         Visible = true
                     };
 
-                    flowPanel.Controls.Add(pictureBox);
-                    flowPanel.Controls.Add(label);
+                    categoryPanel.Controls.Add(categoryPictureBox);
+                    categoryPanel.Controls.Add(categoryLabel);
+                    panel.Controls.Add(categoryPanel);
 
-                    if (!categoryControls.ContainsKey(category))
-                    {
-                        categoryControls[category] = new List<FlowLayoutPanel>();
-                        PictureBox categoryPictureBox = CreateFormattedPictureBox(category, categoryImage, category);
-                        categoryPictureBox.Visible = true;
-                        categoryPictureBox.Click += (sender, e) =>
-                        {
-                            navigationHistory.Push(new NavigationEntry("Category", previousCategory));
-                            RefreshCategory(category);
-                            UpdateNavigationButtons();
-                        };
-
-                        Label categoryLabel = new Label
-                        {
-                            Text = category,
-                            AutoSize = true,
-                            TextAlign = ContentAlignment.MiddleCenter,
-                            Margin = new Padding(10)
-                        };
-
-                        FlowLayoutPanel categoryPanel = new FlowLayoutPanel
-                        {
-                            FlowDirection = FlowDirection.TopDown,
-                            AutoSize = true,
-                            Margin = new Padding(10),
-                            Visible = true
-                        };
-
-                        categoryPanel.Controls.Add(categoryPictureBox);
-                        categoryPanel.Controls.Add(categoryLabel);
-                        panel.Controls.Add(categoryPanel);
-
-                        categoryPanels.Add(categoryPanel);
-                    }
-
-                    categoryControls[category].Add(flowPanel);
+                    categoryPanels.Add(categoryPanel);
                 }
-                else
-                {
-                    MessageBox.Show($"Invalid item data in JSON file: {item}");
-                }
+
+                // Add the item flow panel to the corresponding category
+                categoryControls[category].Add(flowPanel);
             }
+        }
+
+        // Helper method to get the image path
+        private string GetImagePath(string fileName, string folder)
+        {
+            string fullPath = Path.Combine(folder, fileName.ToLower());
+            return File.Exists(fullPath) ? fullPath : Path.Combine(folder, "image not avail.bmp");
         }
 
         private void PictureBox_Click(object sender, EventArgs e)
@@ -299,73 +317,78 @@ namespace Pictures
 
         private void RefreshCategory(string category)
         {
+            // Check if the category is valid
             if (category == null || !categoryControls.ContainsKey(category)) return;
 
+            // Clear the current panel content and styles
             panel.Controls.Clear();
             panel.ColumnStyles.Clear();
             panel.RowStyles.Clear();
 
-            panel.ColumnCount = 6;
-            int column = 0;
-            int row = 0;
+            // Reset panel configuration
+            panel.ColumnCount = 7;
+            int column = 0, row = 0;
 
+            // Populate the panel with controls for the specified category
             foreach (var flowPanel in categoryControls[category])
             {
+                // Move to the next row if the current row is full
                 if (column >= panel.ColumnCount)
                 {
                     column = 0;
                     row++;
                 }
+                // Add the flow panel to the TableLayoutPanel
                 panel.Controls.Add(flowPanel, column, row);
                 flowPanel.Visible = true;
                 column++;
             }
 
+            // Update state variables
             previousCategory = category;
             currentScreenType = "Category";
-            panel.Update();
+            panel.Update(); // Refresh the panel display
         }
 
         private void RefreshItem(string itemTag)
         {
+            // Clear the current panel content and styles
             panel.Controls.Clear();
             panel.ColumnStyles.Clear();
             panel.RowStyles.Clear();
+            panel.ColumnCount = 7;
 
-            panel.ColumnCount = 6;
-
+            // Find the item in the JSON data by tag
             var item = itemData["data"]
                 .FirstOrDefault(m => m["menuitem"] != null && m["menuitem"].ToString() == itemTag);
 
             if (item != null)
             {
+                // Extract item details
                 string itemName = item["menuitem"].ToString();
                 string itemPrice = item["itemprice"].ToString();
 
-                string itemImagePath = GetImagePath($"{itemName}.bmp");
+                // Load item image
                 string picturesFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
-                string fullItemImagePath = Path.Combine(picturesFolder, itemImagePath.ToLower());
-
-                if (!File.Exists(fullItemImagePath))
-                {
-                    fullItemImagePath = Path.Combine(picturesFolder, "image not avail.bmp");
-                }
-
+                string fullItemImagePath = GetImagePath($"{itemName}.bmp", picturesFolder);
                 Image itemImage = LoadImage(fullItemImagePath, itemName);
 
+                // Create picture box for the item
                 PictureBox itemPictureBox = CreateFormattedPictureBox(itemName, itemImage, itemName);
                 itemPictureBox.Visible = true;
 
+                // Create label for the item
                 Label itemLabel = new Label
                 {
                     Name = itemName,
-                    Text = $"{itemName}",
+                    Text = itemName,
                     AutoSize = true,
-                    Margin = new Padding(10),
                     TextAlign = ContentAlignment.MiddleCenter,
-                    Visible = true
+                    Visible = true,
+                    Margin = new Padding(0, 5, 0, 0)
                 };
 
+                // Create flow layout panel for the item
                 FlowLayoutPanel itemPanel = new FlowLayoutPanel
                 {
                     FlowDirection = FlowDirection.TopDown,
@@ -373,21 +396,30 @@ namespace Pictures
                     Margin = new Padding(10),
                     Visible = true
                 };
-
                 itemPanel.Controls.Add(itemPictureBox);
                 itemPanel.Controls.Add(itemLabel);
 
+                // Add the item panel to the main panel
                 panel.Controls.Add(itemPanel, 0, 0);
 
-                ListViewItem listViewItem = new ListViewItem(itemName);
-                listViewItem.SubItems.Add(itemPrice);
-
-                selectionListView.Items.Add(listViewItem);
+                // Add the item to the ListView
+                AddItemToSelectionListView(itemName, itemPrice);
             }
 
+            // Display item modifiers
             DisplayItemModifiers(itemTag);
+
+            // Update state variables
             currentScreenType = "Item";
-            panel.Update();
+            panel.Update(); // Refresh the panel display
+        }
+
+        private void AddItemToSelectionListView(string itemName, string itemPrice)
+        {
+            ListViewItem listViewItem = new ListViewItem("1");
+            listViewItem.SubItems.Add(itemName);
+            listViewItem.SubItems.Add(itemPrice);
+            selectionListView.Items.Add(listViewItem);
         }
 
         private void NextButton_Click(object sender, EventArgs e)
@@ -401,9 +433,9 @@ namespace Pictures
 
         private void PreviousButton_Click(object sender, EventArgs e)
         {
+            // Navigate back to the item screen if we are on the first modifier
             if (currentScreenType == "Modifier" && currentModifierIndex == 1)
             {
-                // Navigate back to the item screen
                 var itemScreen = navigationHistory.FirstOrDefault(entry => entry.ScreenType == "Item");
                 if (itemScreen != null)
                 {
@@ -413,29 +445,45 @@ namespace Pictures
                 }
             }
 
+            // Navigate back to the last modifier if we are on the Final Sale screen
+            if (currentScreenType == "FinalSale")
+            {
+                if (currentModifierIndex > 0 && currentModifierIndex <= currentModifierCodes.Count)
+                {
+                    currentModifierIndex--;
+                    var modCode = currentModifierCodes[currentModifierIndex];
+                    DisplayModifierDetails(modCode);
+                    UpdateNavigationButtons();
+                    return;
+                }
+            }
+
+            // Navigate to the previous screen from the navigation history
             if (navigationHistory.Count > 0)
             {
                 var previousScreen = navigationHistory.Pop();
 
-                if (currentScreenType == "Item")
+                switch (currentScreenType)
                 {
-                    RefreshCategory(previousScreen.ScreenData);
-                    currentScreenType = "Category";
-                }
-                else if (currentScreenType == "Modifier")
-                {
-                    if (currentModifierIndex > 1)
-                    {
-                        currentModifierIndex--;
-                        var modCode = currentModifierCodes[currentModifierIndex - 1];
-                        ResetModifierSelectionState(modCode);
-                        DisplayModifierDetails(modCode);
-                    }
-                }
-                else if (currentScreenType == "Category")
-                {
-                    DisplayMainCategory();
-                    currentScreenType = "MainCategory";
+                    case "Item":
+                        RefreshCategory(previousScreen.ScreenData);
+                        currentScreenType = "Category";
+                        break;
+
+                    case "Modifier":
+                        if (currentModifierIndex > 1)
+                        {
+                            currentModifierIndex--;
+                            var modCode = currentModifierCodes[currentModifierIndex - 1];
+                            ResetModifierSelectionState(modCode);
+                            DisplayModifierDetails(modCode);
+                        }
+                        break;
+
+                    case "Category":
+                        DisplayMainCategory();
+                        currentScreenType = "MainCategory";
+                        break;
                 }
 
                 UpdateNavigationButtons();
@@ -453,24 +501,33 @@ namespace Pictures
 
         private void ResetModifierSelectionState(string modCode)
         {
+            // Find the modifier definition by modCode
             var modifierDef = modifierData["data"]
                 .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == modCode);
 
+            // Check if modifier allows only one choice
             if (modifierDef != null && modifierDef["modchoice"]?.ToString() == "one")
             {
+                // Get all details related to the modifier code
                 var modifierDetails = modifierDetailData["data"]
                     .Where(d => d["modcode"] != null && d["modcode"].ToString() == modCode)
                     .ToList();
 
+                // Iterate through each detail to reset selection state and remove from ListView
                 foreach (var detail in modifierDetails)
                 {
                     string detailDesc = detail["description"]?.ToString() ?? "Unknown Detail";
+
+                    // Reset selection state if it exists in the dictionary
                     if (modifierSelectionState.ContainsKey(detailDesc))
                     {
                         modifierSelectionState[detailDesc] = false;
                     }
 
-                    ListViewItem itemToRemove = selectionListView.Items.Cast<ListViewItem>().FirstOrDefault(item => item.Text == detailDesc);
+                    // Find and remove the item from the ListView
+                    ListViewItem itemToRemove = selectionListView.Items
+                        .Cast<ListViewItem>()
+                        .FirstOrDefault(item => item.SubItems[1].Text == detailDesc);
                     if (itemToRemove != null)
                     {
                         selectionListView.Items.Remove(itemToRemove);
@@ -481,14 +538,16 @@ namespace Pictures
 
         private void DisplayMainCategory()
         {
+            // Clear the current panel content and styles
             panel.Controls.Clear();
             panel.ColumnStyles.Clear();
             panel.RowStyles.Clear();
 
-            panel.ColumnCount = 6;
-            int column = 0;
-            int row = 0;
+            // Reset panel configuration
+            panel.ColumnCount = 7;
+            int column = 0, row = 0;
 
+            // Populate the panel with category panels
             foreach (var categoryPanel in categoryPanels)
             {
                 if (column >= panel.ColumnCount)
@@ -501,13 +560,17 @@ namespace Pictures
                 column++;
             }
 
+            // Update state variables
             currentScreenType = "MainCategory";
-            panel.Update();
+            panel.Update(); // Refresh the panel display
         }
 
         private void UpdateNavigationButtons()
         {
-            previousButton.Visible = currentScreenType == "Modifier" && currentModifierIndex > 1;
+            // Update visibility of the previous button
+            previousButton.Visible = (currentScreenType == "Modifier" && currentModifierIndex > 1) || currentScreenType == "FinalSale";
+
+            // Update visibility of the next button
             nextButton.Visible = currentScreenType == "Modifier" && currentModifierIndex < currentModifierCodes.Count &&
                                  modifierData["data"]
                                      .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == currentModifierCodes[currentModifierIndex - 1])?
@@ -521,14 +584,18 @@ namespace Pictures
 
         private void DisplayItemModifiers(string itemTag)
         {
+            // Find the item in the JSON data by tag
             var item = itemData["data"]
                 .FirstOrDefault(m => m["menuitem"] != null && m["menuitem"].ToString() == itemTag);
 
+            // Exit if the item is not found
             if (item == null) return;
 
+            // Define sections for modifiers
             string[] modifierSections = { "aa", "bb", "cc", "dd", "ee", "ff", "gg", "hh", "ii", "jj", "kk", "ll" };
             currentModifierCodes = new List<string>();
 
+            // Extract modifier codes from the item
             foreach (var section in modifierSections)
             {
                 if (item[section] != null && item[section].Type == JTokenType.String && !string.IsNullOrEmpty(item[section].ToString()))
@@ -537,54 +604,68 @@ namespace Pictures
                 }
             }
 
+            // Initialize modifier index and update navigation history
             currentModifierIndex = 0;
             previousCategory = item["menucategory"].ToString();
             navigationHistory.Push(new NavigationEntry("Item", itemTag));
+
+            // Display the first modifier
             DisplayNextModifier();
         }
 
         private void DisplayNextModifier()
         {
+            // Check if all modifiers have been displayed
             if (currentModifierIndex >= currentModifierCodes.Count)
             {
                 DisplayFinalSaleScreen();
                 return;
             }
 
+            // Retrieve the current modifier code and increment the index
             string modCode = currentModifierCodes[currentModifierIndex];
             currentModifierIndex++;
 
+            // Find the modifier definition by modCode
             var modifierDef = modifierData["data"]
                 .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == modCode);
 
             if (modifierDef != null)
             {
+                // Push the current modifier to the navigation history and display its details
                 navigationHistory.Push(new NavigationEntry("Modifier", modCode));
                 DisplayModifierDetails(modCode);
             }
             else
             {
+                // If the modifier definition is not found, display the next modifier
                 DisplayNextModifier();
             }
         }
 
         private void DisplayModifierDetails(string modCode)
         {
+            // Clear the current panel content
             panel.Controls.Clear();
 
+            // Find the modifier definition by modCode
             var modifierDef = modifierData["data"]
                 .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == modCode);
 
+            // Exit if the modifier definition is not found
             if (modifierDef == null) return;
 
+            // Determine modifier choice type and set button visibility
             string modChoiceType = modifierDef["modchoice"]?.ToString() ?? "one";
             nextButton.Visible = modChoiceType == "upsale";
             previousButton.Visible = currentModifierIndex > 1;
 
+            // Retrieve modifier details related to the modCode
             var modifierDetails = modifierDetailData["data"]
                 .Where(d => d["modcode"] != null && d["modcode"].ToString() == modCode)
                 .ToList();
 
+            // Create and add UI elements for each modifier detail
             foreach (var detail in modifierDetails)
             {
                 string detailDesc = detail["description"]?.ToString() ?? "Unknown Detail";
@@ -601,9 +682,9 @@ namespace Pictures
                 }
 
                 Image detailImage = LoadImage(fullImagePath, detailDesc);
-
                 PictureBox detailPictureBox = CreateFormattedPictureBox(detailDesc, detailImage, detailDesc);
 
+                // Set up click event handlers based on modChoiceType
                 if (modChoiceType == "one")
                 {
                     detailPictureBox.Click += (sender, e) => ModifierDetailPictureBox_Click_One(sender, e, modCode);
@@ -618,14 +699,15 @@ namespace Pictures
                     Text = string.IsNullOrEmpty(cost) ? detailDesc : $"{detailDesc} (+${cost})",
                     AutoSize = true,
                     TextAlign = ContentAlignment.MiddleCenter,
-                    Margin = new Padding(10)
+                    Margin = new Padding(0, 5, 0, 0)
                 };
 
                 FlowLayoutPanel detailPanel = new FlowLayoutPanel
                 {
                     FlowDirection = FlowDirection.TopDown,
                     AutoSize = true,
-                    Margin = new Padding(10)
+                    Margin = new Padding(10),
+                    Visible = true
                 };
 
                 detailPanel.Controls.Add(detailPictureBox);
@@ -640,33 +722,42 @@ namespace Pictures
                 UpdatePictureBoxSelectionState(detailPictureBox, modifierSelectionState[detailDesc], detailDesc, modCode);
             }
 
+            // Update state variables
             currentScreenType = "Modifier";
             UpdateNavigationButtons();
         }
 
         private void DisplayFinalSaleScreen()
         {
+            // Clear the current panel content
             panel.Controls.Clear();
 
+            // Create the thank-you message label
             Label finalMessage = new Label
             {
                 Text = "Thank you for your purchase!",
                 AutoSize = true,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Margin = new Padding(10),
+                Margin = new Padding(0, 5, 0, 0),
                 Font = new Font("Arial", 24, FontStyle.Bold)
             };
 
+            // Create and configure the flow layout panel
             FlowLayoutPanel finalPanel = new FlowLayoutPanel
             {
                 FlowDirection = FlowDirection.TopDown,
                 AutoSize = true,
-                Margin = new Padding(10)
+                Margin = new Padding(10),
+                Visible = true
             };
 
+            // Add the label to the flow layout panel
             finalPanel.Controls.Add(finalMessage);
+
+            // Add the flow layout panel to the main panel
             panel.Controls.Add(finalPanel);
 
+            // Update state variables
             currentScreenType = "FinalSale";
         }
 
@@ -706,16 +797,19 @@ namespace Pictures
 
         private void UpdatePictureBoxSelectionState(PictureBox pictureBox, bool isSelected, string detailDesc, string modCode)
         {
+            // Find the modifier definition by modCode
             var modifierDef = modifierData["data"]
                 .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == modCode);
 
             if (modifierDef != null)
             {
+                // Determine modifier choice type
                 string modChoiceType = modifierDef["modchoice"]?.ToString() ?? "one";
                 if (modChoiceType == "upsale")
                 {
                     if (isSelected)
                     {
+                        // Create an overlay on the PictureBox image to indicate selection
                         Bitmap overlayImage = new Bitmap(pictureBox.Image);
                         using (Graphics g = Graphics.FromImage(overlayImage))
                         {
@@ -728,23 +822,20 @@ namespace Pictures
                     }
                     else
                     {
+                        // Reload the original image from the specified path
                         string imagePath = GetImagePath($"{detailDesc}.bmp");
                         string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
                         string picturesFolder = Path.Combine(desktopPath, "KioskProject");
                         string fullImagePath = Path.Combine(picturesFolder, imagePath.ToLower());
 
-                        if (File.Exists(fullImagePath))
-                        {
-                            pictureBox.Image = Image.FromFile(fullImagePath);
-                        }
-                        else
-                        {
-                            pictureBox.Image = Image.FromFile(Path.Combine(picturesFolder, "image not avail.bmp"));
-                        }
+                        pictureBox.Image = File.Exists(fullImagePath) ?
+                            Image.FromFile(fullImagePath) :
+                            Image.FromFile(Path.Combine(picturesFolder, "image not avail.bmp"));
                     }
                 }
                 else
                 {
+                    // Set the PictureBox background color based on selection state
                     pictureBox.BackColor = isSelected ? Color.Green : Color.Transparent;
                 }
             }
@@ -758,13 +849,14 @@ namespace Pictures
 
             if (isSelected)
             {
-                ListViewItem listViewItem = new ListViewItem(detailDesc);
+                ListViewItem listViewItem = new ListViewItem("1");
+                listViewItem.SubItems.Add(detailDesc);
                 listViewItem.SubItems.Add(cost);
                 selectionListView.Items.Add(listViewItem);
             }
             else
             {
-                ListViewItem itemToRemove = selectionListView.Items.Cast<ListViewItem>().FirstOrDefault(item => item.Text == detailDesc);
+                ListViewItem itemToRemove = selectionListView.Items.Cast<ListViewItem>().FirstOrDefault(item => item.SubItems[1].Text == detailDesc);
                 if (itemToRemove != null)
                 {
                     selectionListView.Items.Remove(itemToRemove);
@@ -776,21 +868,6 @@ namespace Pictures
         {
             string[] parts = path.Split(':');
             return parts.Last().Trim().ToLower();
-        }
-
-        private void Log(string functionName)
-        {
-            string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            string logFilePath = Path.Combine(desktopPath, $"{storeName}_{DateTime.Today:yyyy-MM-dd}.txt");
-            string logMessage = $"[{DateTime.Now:HH:mm:ss}] {functionName}";
-            try
-            {
-                File.AppendAllText(logFilePath, logMessage + Environment.NewLine);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Failed to write log: " + ex.Message);
-            }
         }
 
         private Image LoadImage(string path, string description)
