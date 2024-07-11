@@ -312,6 +312,7 @@ namespace Pictures
             if (pictureBox != null)
             {
                 string itemTag = pictureBox.Tag.ToString();
+                Console.WriteLine($"Item clicked: {itemTag}");
                 navigationHistory.Push(new NavigationEntry("Category", previousCategory));
                 RefreshItem(itemTag);
                 UpdateNavigationButtons();
@@ -600,19 +601,6 @@ namespace Pictures
             previousCategory = item["menucategory"].ToString();
             navigationHistory.Push(new NavigationEntry("Item", itemTag));
 
-            // Check if there is only one modifier and handle it
-            if (currentModifierCodes.Count == 1)
-            {
-                string modCode = currentModifierCodes[0];
-                var modifierDef = modifierData["data"]
-                    .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == modCode);
-
-                if (modifierDef != null && modifierDef["modchoice"]?.ToString() == "upsale")
-                {
-                    nextButton.Visible = true;
-                }
-            }
-
             // Display the first modifier
             DisplayNextModifier();
         }
@@ -640,11 +628,18 @@ namespace Pictures
                 navigationHistory.Push(new NavigationEntry("Modifier", modCode));
                 DisplayModifierDetails(modCode);
 
-                // Make sure to show the Next button if the modChoice type is upsale
+                // Show or hide the Next button based on the current modifier's choice type
                 if (modifierDef["modchoice"]?.ToString() == "upsale")
                 {
                     nextButton.Visible = true;
                 }
+                else
+                {
+                    nextButton.Visible = currentModifierIndex < currentModifierCodes.Count;
+                }
+
+                // Update the previous button visibility
+                previousButton.Visible = currentModifierIndex > 1;
             }
             else
             {
@@ -665,6 +660,8 @@ namespace Pictures
             // Exit if the modifier definition is not found
             if (modifierDef == null) return;
 
+            Console.WriteLine($"Displaying details for modifier: {modCode}");
+
             // Determine modifier choice type and set button visibility
             string modChoiceType = modifierDef["modchoice"]?.ToString() ?? "one";
             nextButton.Visible = modChoiceType == "upsale";
@@ -674,6 +671,14 @@ namespace Pictures
             var modifierDetails = modifierDetailData["data"]
                 .Where(d => d["modcode"] != null && d["modcode"].ToString() == modCode)
                 .ToList();
+
+            Console.WriteLine($"Modifier Details for {modCode}:");
+            foreach (var detail in modifierDetails)
+            {
+                string detailDesc = detail["description"]?.ToString() ?? "Unknown Detail";
+                string cost = detail["cost"]?.ToString() ?? "N/A";
+                Console.WriteLine($"- {detailDesc}: {cost}");
+            }
 
             // Create and add UI elements for each modifier detail
             foreach (var detail in modifierDetails)
