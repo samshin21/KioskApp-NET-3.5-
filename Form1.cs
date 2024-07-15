@@ -438,9 +438,7 @@ namespace Pictures
             panel.Controls.Clear();
 
             Label finalMessage = CreateLabel("Thank you for your purchase!");
-            {
-                Font = new Font("Arial", 24, FontStyle.Bold);
-            };
+            finalMessage.Font = new Font("Arial", 24, FontStyle.Bold);
 
             FlowLayoutPanel finalPanel = CreateFlowLayoutPanel();
             finalPanel.Controls.Add(finalMessage);
