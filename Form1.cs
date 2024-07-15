@@ -266,6 +266,9 @@ namespace Pictures
                     {
                         navigationHistory.Push(new NavigationEntry("Category", previousCategory));
                         RefreshCategory(category);
+
+                        // Set the current screen type to 'Item' after a category picture box is clicked
+                        currentScreenType = "Item";
                         UpdateNavigationButtons();
                     };
 
