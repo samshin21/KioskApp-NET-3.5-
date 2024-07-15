@@ -98,7 +98,7 @@ namespace Pictures
                 BackColor = buttonBackColor,
                 ForeColor = buttonForeColor,
                 Font = buttonFont,
-                Visible = false
+                Visible = true // Ensure the nextButton is always visible
             };
             nextButton.Click += NextButton_Click;
             this.Controls.Add(nextButton);
@@ -312,7 +312,7 @@ namespace Pictures
             if (pictureBox != null)
             {
                 string itemTag = pictureBox.Tag.ToString();
-                Console.WriteLine($"Item clicked: {itemTag}");
+                Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] Item clicked: {itemTag}");
                 navigationHistory.Push(new NavigationEntry("Category", previousCategory));
                 LogAssociatedModifiers(itemTag);
                 RefreshItem(itemTag);
@@ -351,12 +351,23 @@ namespace Pictures
             // Update state variables
             previousCategory = category;
             currentScreenType = "Category";
+            Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] Current screen type set to 'Category'");
             panel.Update(); // Refresh the panel display
             UpdateNavigationButtons(); // Update buttons after refreshing the category
         }
 
         private void RefreshItem(string itemTag)
         {
+            // Add log to ensure we can track when this method is called
+            Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] Attempting to refresh item");
+
+            // Safeguard to prevent RefreshItem if the screen type is Modifier
+            if (currentScreenType == "Modifier")
+            {
+                Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] Aborting RefreshItem because the current screen type is 'Modifier'");
+                return;
+            }
+
             // Clear the current panel content and styles
             panel.Controls.Clear();
             panel.ColumnStyles.Clear();
@@ -416,6 +427,7 @@ namespace Pictures
 
             // Update state variables
             currentScreenType = "Item";
+            Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] Current screen type set to 'Item'");
             panel.Update(); // Refresh the panel display
             UpdateNavigationButtons(); // Update buttons after refreshing the item
         }
@@ -430,9 +442,14 @@ namespace Pictures
 
         private void NextButton_Click(object sender, EventArgs e)
         {
+            Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] Next button clicked");
             if (currentScreenType == "Modifier")
             {
                 DisplayNextModifier();
+            }
+            else
+            {
+                Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] Next button clicked, but current screen is not 'Modifier'");
             }
         }
 
@@ -552,6 +569,7 @@ namespace Pictures
 
             // Update state variables
             currentScreenType = "MainCategory";
+            Console.WriteLine($"[{DateTime.Now.ToString("hh:mm:ss.fff")}] current screen type set to 'maincategory'");
             panel.Update(); // Refresh the panel display
             UpdateNavigationButtons(); // Update buttons after displaying the main category
         }
@@ -589,6 +607,7 @@ namespace Pictures
 
         private void DisplayNextModifier()
         {
+            Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] DisplayNextModifier called");
             // Check if all modifiers have been displayed
             if (currentModifierIndex >= currentModifierCodes.Count)
             {
@@ -631,7 +650,8 @@ namespace Pictures
             // Exit if the modifier definition is not found
             if (modifierDef == null) return;
 
-            Console.WriteLine($"Displaying details for modifier: {modCode}");
+            // Log the current modifier index and total number of modifiers
+            Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] Displaying details for modifier {currentModifierIndex}/{currentModifierCodes.Count}: {modCode}");
 
             // Determine modifier choice type and set button visibility
             string modChoiceType = modifierDef["modchoice"]?.ToString() ?? "one";
@@ -641,12 +661,11 @@ namespace Pictures
                 .Where(d => d["modcode"] != null && d["modcode"].ToString() == modCode)
                 .ToList();
 
-            Console.WriteLine($"Modifier Details for {modCode}:");
             foreach (var detail in modifierDetails)
             {
                 string detailDesc = detail["description"]?.ToString() ?? "Unknown Detail";
                 string cost = detail["cost"]?.ToString() ?? "N/A";
-                Console.WriteLine($"- {detailDesc}: {cost}");
+                Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] - {detailDesc}: {cost}");
             }
 
             // Create and add UI elements for each modifier detail
@@ -708,6 +727,7 @@ namespace Pictures
 
             // Update state variables
             currentScreenType = "Modifier";
+            Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] Current screen type set to 'Modifier'");
         }
 
         private void DisplayFinalSaleScreen()
@@ -742,6 +762,7 @@ namespace Pictures
 
             // Update state variables
             currentScreenType = "FinalSale";
+            Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] Current screen type set to 'FinalSale'");
             UpdateNavigationButtons(); // Update buttons after displaying the final sale screen
         }
 
@@ -870,22 +891,22 @@ namespace Pictures
         private void LogItemsAndModifierDefs()
         {
             // Log all items
-            Console.WriteLine("Items:");
+            //Console.WriteLine("Items:");
             foreach (JObject item in itemData["data"])
             {
                 string itemName = item["menuitem"]?.ToString() ?? "Unknown Item";
                 string itemPrice = item["itemprice"]?.ToString() ?? "Unknown Price";
                 string itemCategory = item["menucategory"]?.ToString() ?? "Unknown Category";
-                Console.WriteLine($"Name: {itemName}, Price: {itemPrice}, Category: {itemCategory}");
+                //Console.WriteLine($"Name: {itemName}, Price: {itemPrice}, Category: {itemCategory}");
             }
 
             // Log all modifier definitions
-            Console.WriteLine("\nModifier Definitions:");
+            //Console.WriteLine("\nModifier Definitions:");
             foreach (JObject modifierDef in modifierData["data"])
             {
                 string modCode = modifierDef["modcode"]?.ToString() ?? "Unknown ModCode";
                 string modChoice = modifierDef["modchoice"]?.ToString() ?? "Unknown ModChoice";
-                Console.WriteLine($"ModCode: {modCode}, ModChoice: {modChoice}");
+                //Console.WriteLine($"ModCode: {modCode}, ModChoice: {modChoice}");
             }
         }
 
@@ -912,7 +933,7 @@ namespace Pictures
             }
 
             // Log the associated modifiers
-            Console.WriteLine($"Modifiers for item {itemTag}:");
+            Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] Modifiers for item {itemTag}:");
             foreach (var modCode in associatedModifierCodes)
             {
                 var modifierDef = modifierData["data"]
@@ -946,10 +967,8 @@ namespace Pictures
             nextButton.Visible = nextButtonVisible;
 
             // Log the next button visibility
-            Console.WriteLine($"Next button visibility: {nextButtonVisible}");
+            Console.WriteLine($"[{DateTime.Now.ToString("HH:mm:ss.fff")}] Next button visibility: {nextButtonVisible}");
         }
-
-
     }
 
     public class NavigationEntry
