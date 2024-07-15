@@ -314,8 +314,8 @@ namespace Pictures
                 string itemTag = pictureBox.Tag.ToString();
                 Console.WriteLine($"Item clicked: {itemTag}");
                 navigationHistory.Push(new NavigationEntry("Category", previousCategory));
+                LogAssociatedModifiers(itemTag);
                 RefreshItem(itemTag);
-                UpdateNavigationButtons();
             }
         }
 
@@ -352,6 +352,7 @@ namespace Pictures
             previousCategory = category;
             currentScreenType = "Category";
             panel.Update(); // Refresh the panel display
+            UpdateNavigationButtons(); // Update buttons after refreshing the category
         }
 
         private void RefreshItem(string itemTag)
@@ -416,6 +417,7 @@ namespace Pictures
             // Update state variables
             currentScreenType = "Item";
             panel.Update(); // Refresh the panel display
+            UpdateNavigationButtons(); // Update buttons after refreshing the item
         }
 
         private void AddItemToSelectionListView(string itemName, string itemPrice)
@@ -432,7 +434,6 @@ namespace Pictures
             {
                 DisplayNextModifier();
             }
-            UpdateNavigationButtons();
         }
 
         private void PreviousButton_Click(object sender, EventArgs e)
@@ -445,7 +446,6 @@ namespace Pictures
                     currentModifierIndex--;
                     var modCode = currentModifierCodes[currentModifierIndex];
                     DisplayModifierDetails(modCode);
-                    UpdateNavigationButtons();
                     return;
                 }
             }
@@ -477,9 +477,8 @@ namespace Pictures
                         currentScreenType = "MainCategory";
                         break;
                 }
-
-                UpdateNavigationButtons();
             }
+            UpdateNavigationButtons(); // Update buttons after previous action
         }
 
         private void StartOverButton_Click(object sender, EventArgs e)
@@ -488,7 +487,6 @@ namespace Pictures
             selectionListView.Items.Clear();
             modifierSelectionState.Clear();
             DisplayMainCategory();
-            UpdateNavigationButtons();
         }
 
         private void ResetModifierSelectionState(string modCode)
@@ -555,23 +553,7 @@ namespace Pictures
             // Update state variables
             currentScreenType = "MainCategory";
             panel.Update(); // Refresh the panel display
-        }
-
-        private void UpdateNavigationButtons()
-        {
-            // Update visibility of the previous button
-            previousButton.Visible = (currentScreenType == "Modifier" && currentModifierIndex > 1) || currentScreenType == "FinalSale";
-
-            // Update visibility of the next button
-            nextButton.Visible = currentScreenType == "Modifier" && currentModifierIndex < currentModifierCodes.Count &&
-                                 modifierData["data"]
-                                     .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == currentModifierCodes[currentModifierIndex - 1])?
-                                     ["modchoice"]?.ToString() == "upsale";
-        }
-
-        private string GetCurrentScreen()
-        {
-            return previousCategory;
+            UpdateNavigationButtons(); // Update buttons after displaying the main category
         }
 
         private void DisplayItemModifiers(string itemTag)
@@ -627,25 +609,14 @@ namespace Pictures
                 // Push the current modifier to the navigation history and display its details
                 navigationHistory.Push(new NavigationEntry("Modifier", modCode));
                 DisplayModifierDetails(modCode);
-
-                // Show or hide the Next button based on the current modifier's choice type
-                if (modifierDef["modchoice"]?.ToString() == "upsale")
-                {
-                    nextButton.Visible = true;
-                }
-                else
-                {
-                    nextButton.Visible = currentModifierIndex < currentModifierCodes.Count;
-                }
-
-                // Update the previous button visibility
-                previousButton.Visible = currentModifierIndex > 1;
             }
             else
             {
                 // If the modifier definition is not found, display the next modifier
                 DisplayNextModifier();
             }
+
+            UpdateNavigationButtons(); // Update buttons after displaying the next modifier
         }
 
         private void DisplayModifierDetails(string modCode)
@@ -664,8 +635,6 @@ namespace Pictures
 
             // Determine modifier choice type and set button visibility
             string modChoiceType = modifierDef["modchoice"]?.ToString() ?? "one";
-            nextButton.Visible = modChoiceType == "upsale";
-            previousButton.Visible = currentModifierIndex > 1;
 
             // Retrieve modifier details related to the modCode
             var modifierDetails = modifierDetailData["data"]
@@ -739,7 +708,6 @@ namespace Pictures
 
             // Update state variables
             currentScreenType = "Modifier";
-            UpdateNavigationButtons();
         }
 
         private void DisplayFinalSaleScreen()
@@ -774,6 +742,7 @@ namespace Pictures
 
             // Update state variables
             currentScreenType = "FinalSale";
+            UpdateNavigationButtons(); // Update buttons after displaying the final sale screen
         }
 
         private void ModifierDetailPictureBox_Click_One(object sender, EventArgs e, string modCode)
@@ -919,6 +888,68 @@ namespace Pictures
                 Console.WriteLine($"ModCode: {modCode}, ModChoice: {modChoice}");
             }
         }
+
+        private void LogAssociatedModifiers(string itemTag)
+        {
+            // Find the item in the JSON data by tag
+            var item = itemData["data"]
+                .FirstOrDefault(m => m["menuitem"] != null && m["menuitem"].ToString() == itemTag);
+
+            // Exit if the item is not found
+            if (item == null) return;
+
+            // Define sections for modifiers
+            string[] modifierSections = { "aa", "bb", "cc", "dd", "ee", "ff", "gg", "hh", "ii", "jj", "kk", "ll" };
+            var associatedModifierCodes = new List<string>();
+
+            // Extract modifier codes from the item
+            foreach (var section in modifierSections)
+            {
+                if (item[section] != null && item[section].Type == JTokenType.String && !string.IsNullOrEmpty(item[section].ToString()))
+                {
+                    associatedModifierCodes.Add(item[section].ToString());
+                }
+            }
+
+            // Log the associated modifiers
+            Console.WriteLine($"Modifiers for item {itemTag}:");
+            foreach (var modCode in associatedModifierCodes)
+            {
+                var modifierDef = modifierData["data"]
+                    .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == modCode);
+
+                if (modifierDef != null)
+                {
+                    string modChoice = modifierDef["modchoice"]?.ToString() ?? "Unknown ModChoice";
+                    Console.WriteLine($"ModCode: {modCode}, ModChoice: {modChoice}");
+                }
+            }
+        }
+
+        private void UpdateNavigationButtons()
+        {
+            bool previousButtonVisible = (currentScreenType == "Modifier" && currentModifierIndex > 1) || currentScreenType == "FinalSale";
+
+            bool nextButtonVisible = false;
+            if (currentScreenType == "Modifier" && currentModifierIndex < currentModifierCodes.Count)
+            {
+                var modifier = modifierData["data"]
+                                    .FirstOrDefault(m => m["modcode"] != null && m["modcode"].ToString() == currentModifierCodes[currentModifierIndex - 1]);
+
+                if (modifier != null && modifier["modchoice"]?.ToString() == "upsale")
+                {
+                    nextButtonVisible = true;
+                }
+            }
+
+            previousButton.Visible = previousButtonVisible;
+            nextButton.Visible = nextButtonVisible;
+
+            // Log the next button visibility
+            Console.WriteLine($"Next button visibility: {nextButtonVisible}");
+        }
+
+
     }
 
     public class NavigationEntry
