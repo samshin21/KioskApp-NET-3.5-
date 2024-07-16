@@ -22,13 +22,14 @@ namespace Pictures
         private string previousCategory, currentScreenType;
         private ListView selectionListView;
         private Dictionary<string, bool> modifierSelectionState;
+        private Dictionary<string, Image> imageCache;
 
         public Form1()
         {
             InitializeComponent();
             InitializeForm();
             LoadData();
-            CreateCategoryPictureBoxesAndPanels();
+            CreateCategoryPictureBoxes();
         }
 
         private void InitializeForm()
@@ -39,6 +40,7 @@ namespace Pictures
             InitializeSelectionListView();
             navigationHistory = new Stack<NavigationEntry>();
             modifierSelectionState = new Dictionary<string, bool>();
+            imageCache = new Dictionary<string, Image>();
             SetJsonPaths();
         }
 
@@ -56,15 +58,15 @@ namespace Pictures
             Color buttonBackColor = Color.Black, buttonForeColor = Color.White;
             Font buttonFont = new Font("Calibri", 12, FontStyle.Bold);
 
-            startOverButton = CreateButton("Start Over", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, StartOverButton_Click);
-            previousButton = CreateButton("Previous", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, PreviousButton_Click, false);
-            nextButton = CreateButton("Next", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, NextButton_Click, true);
+            startOverButton = CreateNavigationButton("Start Over", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, StartOverButton_Click);
+            previousButton = CreateNavigationButton("Previous", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, PreviousButton_Click, false);
+            nextButton = CreateNavigationButton("Next", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, NextButton_Click, true);
 
             PositionButtons(buttonWidth, buttonHeight, buttonSpacing);
             this.Resize += (sender, e) => PositionButtons(buttonWidth, buttonHeight, buttonSpacing);
         }
 
-        private Button CreateButton(string text, int width, int height, Color backColor, Color foreColor, Font font, EventHandler onClick, bool visible = true)
+        private Button CreateNavigationButton(string text, int width, int height, Color backColor, Color foreColor, Font font, EventHandler onClick, bool visible = true)
         {
             var button = new Button
             {
@@ -131,7 +133,7 @@ namespace Pictures
             }
         }
 
-        private void CreateCategoryPictureBoxesAndPanels()
+        private void CreateCategoryPictureBoxes()
         {
             if (itemData == null) return;
 
@@ -147,47 +149,27 @@ namespace Pictures
             categoryControls = new Dictionary<string, List<FlowLayoutPanel>>();
             categoryPanels = new List<FlowLayoutPanel>();
 
-            foreach (JObject item in itemData["data"])
+            var categories = itemData["data"].Select(item => item["menucategory"]?.ToString()).Distinct();
+            foreach (var category in categories)
             {
-                string itemName = item["menuitem"]?.ToString();
-                string category = item["menucategory"]?.ToString();
-
-                if (string.IsNullOrEmpty(itemName) || string.IsNullOrEmpty(category))
-                {
-                    MessageBox.Show($"Invalid item data in JSON file: {item}");
-                    continue;
-                }
+                if (string.IsNullOrEmpty(category)) continue;
 
                 string picturesFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
-                Image itemImage = LoadImage(GetImagePath($"{itemName}.bmp", picturesFolder));
-                Image categoryImage = LoadImage(GetImagePath($"{category}.bmp", picturesFolder));
+                Image categoryImage = LoadImage(GetImagePath($"{category}.bmp", picturesFolder), category);
 
-                PictureBox itemPictureBox = CreatePictureBox(itemName, itemImage, itemName, PictureBox_Click);
-                Label itemLabel = CreateLabel(itemName);
+                PictureBox categoryPictureBox = CreatePictureBox(category, categoryImage, category, CategoryPictureBox_Click);
+                Label categoryLabel = CreateLabel(category);
 
-                FlowLayoutPanel itemPanel = CreateFlowLayoutPanel();
-                itemPanel.Controls.Add(itemPictureBox);
-                itemPanel.Controls.Add(itemLabel);
+                FlowLayoutPanel categoryPanel = CreateFlowLayoutPanel();
+                categoryPanel.Controls.Add(categoryPictureBox);
+                categoryPanel.Controls.Add(categoryLabel);
+                panel.Controls.Add(categoryPanel);
 
-                if (!categoryControls.ContainsKey(category))
-                {
-                    categoryControls[category] = new List<FlowLayoutPanel>();
+                categoryPanels.Add(categoryPanel);
+                categoryControls[category] = new List<FlowLayoutPanel>();
 
-                    PictureBox categoryPictureBox = CreatePictureBox(category, categoryImage, category, CategoryPictureBox_Click);
-                    Label categoryLabel = CreateLabel(category);
-
-                    FlowLayoutPanel categoryPanel = CreateFlowLayoutPanel();
-                    categoryPanel.Controls.Add(categoryPictureBox);
-                    categoryPanel.Controls.Add(categoryLabel);
-                    panel.Controls.Add(categoryPanel);
-
-                    categoryPanels.Add(categoryPanel);
-                }
-
-                categoryControls[category].Add(itemPanel);
-
-                // Log the loading of item images
-                Console.WriteLine($"Loaded image for item: {itemName}, Path: {GetImagePath($"{itemName}.bmp", picturesFolder)}");
+                // Log the loading of category images
+                Console.WriteLine($"[CreateCategoryPictureBoxes] {DateTime.Now}: Loaded image for category: {category}, Path: {GetImagePath($"{category}.bmp", picturesFolder)}");
             }
         }
 
@@ -218,6 +200,21 @@ namespace Pictures
             };
         }
 
+        private Button CreateItemButton(string text, string tag, EventHandler onClick)
+        {
+            var button = new Button
+            {
+                Text = text,
+                Size = new Size(158, 118),
+                BackColor = Color.Black,
+                ForeColor = Color.White,
+                Tag = tag, // Store the image name in the Tag property
+                Padding = new Padding(5)
+            };
+            button.Click += onClick;
+            return button;
+        }
+
         private FlowLayoutPanel CreateFlowLayoutPanel()
         {
             return new FlowLayoutPanel
@@ -234,40 +231,32 @@ namespace Pictures
             return File.Exists(fullPath) ? fullPath : Path.Combine(folder, "image not avail.bmp");
         }
 
-        private Image LoadImage(string path)
+        private Image LoadImage(string path, string pictureBoxName)
         {
-            int maxRetries = 3;
-            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            if (imageCache.ContainsKey(path))
             {
-                try
-                {
-                    Image image = Image.FromFile(path);
-                    Console.WriteLine($"Successfully loaded image: {path}"); // Log successful image load
-                    return image;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to load image: {path}, Attempt: {attempt}, Error: {ex.Message}"); // Log image load failure
-                    if (attempt == maxRetries)
-                    {
-                        string fallbackPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
-                        fallbackPath = Path.Combine(fallbackPath, "image not avail.bmp");
-                        Console.WriteLine($"Using fallback image: {fallbackPath}"); // Log fallback image usage
-                        return Image.FromFile(fallbackPath);
-                    }
-                }
+                Console.WriteLine($"[LoadImage] {DateTime.Now}: Using cached image: {path} | {pictureBoxName}");
+                return imageCache[path];
             }
-            return null;
-        }
 
-        private void PictureBox_Click(object sender, EventArgs e)
-        {
-            if (sender is PictureBox pictureBox)
+            try
             {
-                string itemTag = (string)pictureBox.Tag; // Retrieve the image name from the Tag property
-                navigationHistory.Push(new NavigationEntry("Category", previousCategory));
-                RefreshItem(itemTag);
-                DisplayItemModifiers(itemTag);
+                Image image = Image.FromFile(path);
+                imageCache[path] = image;
+                Console.WriteLine($"[LoadImage] {DateTime.Now}: Successfully loaded image: {path} | {pictureBoxName}"); // Log successful image load
+                return image;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[LoadImage] {DateTime.Now}: Failed to load image: {path}, Error: {ex.Message} | {pictureBoxName}"); // Log image load failure
+                string fallbackPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
+                fallbackPath = Path.Combine(fallbackPath, "image not avail.bmp");
+                if (!imageCache.ContainsKey(fallbackPath))
+                {
+                    imageCache[fallbackPath] = Image.FromFile(fallbackPath);
+                    Console.WriteLine($"[LoadImage] {DateTime.Now}: Using fallback image: {fallbackPath} | {pictureBoxName}"); // Log fallback image usage
+                }
+                return imageCache[fallbackPath];
             }
         }
 
@@ -292,22 +281,40 @@ namespace Pictures
             panel.RowStyles.Clear();
             panel.ColumnCount = 7;
 
-            int column = 0, row = 0;
-            foreach (var flowPanel in categoryControls[category])
+            var items = itemData["data"].Where(item => item["menucategory"]?.ToString() == category);
+
+            foreach (var item in items)
             {
-                if (column >= panel.ColumnCount)
-                {
-                    column = 0;
-                    row++;
-                }
-                panel.Controls.Add(flowPanel, column, row);
-                column++;
+                string itemName = item["menuitem"]?.ToString();
+                if (string.IsNullOrEmpty(itemName)) continue;
+
+                Button itemButton = CreateItemButton(itemName, itemName, ItemButton_Click);
+
+                FlowLayoutPanel itemPanel = CreateFlowLayoutPanel();
+                itemPanel.Controls.Add(itemButton);
+
+                categoryControls[category].Add(itemPanel);
+                panel.Controls.Add(itemPanel);
+
+                // Log the loading of item buttons
+                Console.WriteLine($"[RefreshCategory] {DateTime.Now}: Loaded button for item: {itemName}");
             }
 
             previousCategory = category;
             currentScreenType = "Category";
             panel.Update();
             UpdateNavigationButtons();
+        }
+
+        private void ItemButton_Click(object sender, EventArgs e)
+        {
+            if (sender is Button button)
+            {
+                string itemTag = (string)button.Tag; // Retrieve the image name from the Tag property
+                navigationHistory.Push(new NavigationEntry("Category", previousCategory));
+                RefreshItem(itemTag);
+                DisplayItemModifiers(itemTag);
+            }
         }
 
         private void RefreshItem(string itemTag)
@@ -326,22 +333,17 @@ namespace Pictures
                 string itemName = item["menuitem"].ToString();
                 string itemPrice = item["itemprice"].ToString();
 
-                string picturesFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
-                Image itemImage = LoadImage(GetImagePath($"{itemName}.bmp", picturesFolder));
-
-                PictureBox itemPictureBox = CreatePictureBox(itemName, itemImage, itemName, null);
-                Label itemLabel = CreateLabel(itemName);
+                Button itemButton = CreateItemButton(itemName, itemName, null);
 
                 FlowLayoutPanel itemPanel = CreateFlowLayoutPanel();
-                itemPanel.Controls.Add(itemPictureBox);
-                itemPanel.Controls.Add(itemLabel);
+                itemPanel.Controls.Add(itemButton);
 
                 panel.Controls.Add(itemPanel, 0, 0);
 
                 AddItemToSelectionListView(itemName, itemPrice);
 
-                // Log the loading of item images
-                Console.WriteLine($"Loaded image for item: {itemName}, Path: {GetImagePath($"{itemName}.bmp", picturesFolder)}");
+                // Log the loading of item buttons
+                Console.WriteLine($"[RefreshItem] {DateTime.Now}: Loaded button for item: {itemName}");
             }
         }
 
@@ -376,7 +378,7 @@ namespace Pictures
             }
 
             // Log the modifiers to the console
-            Console.WriteLine($"Modifiers for item '{itemTag}': {string.Join(", ", currentModifierCodes.ToArray())}");
+            Console.WriteLine($"[DisplayItemModifiers] {DateTime.Now}: Modifiers for item '{itemTag}': {string.Join(", ", currentModifierCodes.ToArray())}");
 
             if (missingModifiers.Count > 0)
             {
@@ -433,7 +435,7 @@ namespace Pictures
                 string detailDesc = detail["description"]?.ToString() ?? "Unknown Detail";
                 string cost = detail["cost"]?.ToString() ?? "";
                 string imagePath = GetImagePath(detail["location"]?.ToString() ?? "image not avail.bmp", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject"));
-                Image detailImage = LoadImage(imagePath);
+                Image detailImage = LoadImage(imagePath, detailDesc);
 
                 PictureBox detailPictureBox = CreatePictureBox(detailDesc, detailImage, detailDesc, modChoiceType == "one" ? (EventHandler)((s, e) => ModifierDetailPictureBox_Click_One(s, e, modCode)) : (EventHandler)((s, e) => ModifierDetailPictureBox_Click_Upsale(s, e, modCode)));
                 Label detailLabel = CreateLabel(string.IsNullOrEmpty(cost) ? detailDesc : $"{detailDesc} (+${cost})");
@@ -459,8 +461,12 @@ namespace Pictures
         {
             panel.Controls.Clear();
 
-            Label finalMessage = CreateLabel("Thank you for your purchase!");
-            finalMessage.Font = new Font("Arial", 24, FontStyle.Bold);
+            Label finalMessage = new Label
+            {
+                Text = "Thank you for your purchase!",
+                Font = new Font("Arial", 24, FontStyle.Bold),
+                AutoSize = true
+            };
 
             FlowLayoutPanel finalPanel = CreateFlowLayoutPanel();
             finalPanel.Controls.Add(finalMessage);
@@ -531,7 +537,7 @@ namespace Pictures
         private Image ReloadImage(string imageName)
         {
             string imagePath = GetImagePath($"{imageName}.bmp", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject"));
-            return LoadImage(imagePath);
+            return LoadImage(imagePath, imageName);
         }
 
         private void UpdateSelectionListView(string detailDesc, bool isSelected, string modCode)
