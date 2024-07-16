@@ -12,23 +12,16 @@ namespace Pictures
     {
         private TableLayoutPanel panel;
         private Stack<NavigationEntry> navigationHistory;
-        private Button nextButton;
-        private Button previousButton;
-        private Button startOverButton;
-        private string jsonPath;
-        private string modifierJsonPath;
-        private string modifierDetailJsonPath;
+        private Button nextButton, previousButton, startOverButton;
+        private string jsonPath, modifierJsonPath, modifierDetailJsonPath;
         private Dictionary<string, List<FlowLayoutPanel>> categoryControls;
         private List<FlowLayoutPanel> categoryPanels;
-        private JObject itemData;
-        private JObject modifierData;
-        private JObject modifierDetailData;
+        private JObject itemData, modifierData, modifierDetailData;
         private List<string> currentModifierCodes;
         private int currentModifierIndex;
-        private string previousCategory;
+        private string previousCategory, currentScreenType;
         private ListView selectionListView;
         private Dictionary<string, bool> modifierSelectionState;
-        private string currentScreenType;
 
         public Form1()
         {
@@ -59,11 +52,8 @@ namespace Pictures
 
         private void InitializeNavigationButtons()
         {
-            int buttonWidth = 150;
-            int buttonHeight = 100;
-            int buttonSpacing = 10;
-            Color buttonBackColor = Color.Black;
-            Color buttonForeColor = Color.White;
+            int buttonWidth = 150, buttonHeight = 100, buttonSpacing = 10;
+            Color buttonBackColor = Color.Black, buttonForeColor = Color.White;
             Font buttonFont = new Font("Calibri", 12, FontStyle.Bold);
 
             startOverButton = CreateButton("Start Over", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, StartOverButton_Click);
@@ -92,8 +82,7 @@ namespace Pictures
 
         private void PositionButtons(int buttonWidth, int buttonHeight, int buttonSpacing)
         {
-            int startX = 20;
-            int startY = 750;
+            int startX = 20, startY = 750;
             startOverButton.Location = new Point(startX, startY);
             previousButton.Location = new Point(startX + buttonWidth + buttonSpacing, startY);
             nextButton.Location = new Point(startX + 2 * (buttonWidth + buttonSpacing), startY);
@@ -196,6 +185,9 @@ namespace Pictures
                 }
 
                 categoryControls[category].Add(itemPanel);
+
+                // Log the loading of item images
+                Console.WriteLine($"Loaded image for item: {itemName}, Path: {GetImagePath($"{itemName}.bmp", picturesFolder)}");
             }
         }
 
@@ -209,7 +201,7 @@ namespace Pictures
                 Image = image,
                 Margin = new Padding(0, 0, 0, 5),
                 Padding = new Padding(0),
-                Tag = tag
+                Tag = tag // Store the image name in the Tag property
             };
             pictureBox.Click += onClick;
             return pictureBox;
@@ -244,23 +236,35 @@ namespace Pictures
 
         private Image LoadImage(string path)
         {
-            try
+            int maxRetries = 3;
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                return Image.FromFile(path);
+                try
+                {
+                    Image image = Image.FromFile(path);
+                    Console.WriteLine($"Successfully loaded image: {path}"); // Log successful image load
+                    return image;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to load image: {path}, Attempt: {attempt}, Error: {ex.Message}"); // Log image load failure
+                    if (attempt == maxRetries)
+                    {
+                        string fallbackPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
+                        fallbackPath = Path.Combine(fallbackPath, "image not avail.bmp");
+                        Console.WriteLine($"Using fallback image: {fallbackPath}"); // Log fallback image usage
+                        return Image.FromFile(fallbackPath);
+                    }
+                }
             }
-            catch (Exception)
-            {
-                string fallbackPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
-                fallbackPath = Path.Combine(fallbackPath, "image not avail.bmp");
-                return Image.FromFile(fallbackPath);
-            }
+            return null;
         }
 
         private void PictureBox_Click(object sender, EventArgs e)
         {
             if (sender is PictureBox pictureBox)
             {
-                string itemTag = pictureBox.Tag.ToString();
+                string itemTag = (string)pictureBox.Tag; // Retrieve the image name from the Tag property
                 navigationHistory.Push(new NavigationEntry("Category", previousCategory));
                 RefreshItem(itemTag);
                 DisplayItemModifiers(itemTag);
@@ -335,6 +339,9 @@ namespace Pictures
                 panel.Controls.Add(itemPanel, 0, 0);
 
                 AddItemToSelectionListView(itemName, itemPrice);
+
+                // Log the loading of item images
+                Console.WriteLine($"Loaded image for item: {itemName}, Path: {GetImagePath($"{itemName}.bmp", picturesFolder)}");
             }
         }
 
@@ -353,13 +360,28 @@ namespace Pictures
 
             string[] modifierSections = { "aa", "bb", "cc", "dd", "ee", "ff", "gg", "hh", "ii", "jj", "kk", "ll" };
             currentModifierCodes = new List<string>();
+            List<string> missingModifiers = new List<string>();
 
             foreach (var section in modifierSections)
             {
                 if (item[section] != null && item[section].Type == JTokenType.String && !string.IsNullOrEmpty(item[section].ToString()))
                 {
-                    currentModifierCodes.Add(item[section].ToString());
+                    string modCode = item[section].ToString();
+                    currentModifierCodes.Add(modCode);
+                    if (!modifierData["data"].Any(m => m["modcode"]?.ToString() == modCode))
+                    {
+                        missingModifiers.Add(modCode);
+                    }
                 }
+            }
+
+            // Log the modifiers to the console
+            Console.WriteLine($"Modifiers for item '{itemTag}': {string.Join(", ", currentModifierCodes.ToArray())}");
+
+            if (missingModifiers.Count > 0)
+            {
+                string missingModifiersMessage = $"Missing Modifiers for item '{itemTag}':\n" + string.Join("\n", missingModifiers.ToArray());
+                MessageBox.Show(missingModifiersMessage, "Missing Modifiers", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
 
             currentModifierIndex = 0;
@@ -485,7 +507,7 @@ namespace Pictures
             string modChoiceType = modifierDef["modchoice"]?.ToString() ?? "one";
             if (modChoiceType == "upsale")
             {
-                pictureBox.Image = isSelected ? CreateOverlayImage(pictureBox.Image) : ReloadImage(detailDesc);
+                pictureBox.Image = isSelected ? CreateOverlayImage(pictureBox.Image) : ReloadImage((string)pictureBox.Tag);
             }
             else
             {
@@ -506,9 +528,9 @@ namespace Pictures
             return overlayImage;
         }
 
-        private Image ReloadImage(string detailDesc)
+        private Image ReloadImage(string imageName)
         {
-            string imagePath = GetImagePath($"{detailDesc}.bmp", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject"));
+            string imagePath = GetImagePath($"{imageName}.bmp", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject"));
             return LoadImage(imagePath);
         }
 
