@@ -60,7 +60,7 @@ namespace Pictures
 
             startOverButton = CreateNavigationButton("Start Over", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, StartOverButton_Click);
             previousButton = CreateNavigationButton("Previous", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, PreviousButton_Click, false);
-            nextButton = CreateNavigationButton("Next", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, NextButton_Click, true);
+            nextButton = CreateNavigationButton("Next", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, NextButton_Click, false);
 
             PositionButtons(buttonWidth, buttonHeight, buttonSpacing);
             this.Resize += (sender, e) => PositionButtons(buttonWidth, buttonHeight, buttonSpacing);
@@ -455,6 +455,7 @@ namespace Pictures
             }
 
             currentScreenType = "Modifier";
+            UpdateNavigationButtons();
         }
 
         private void DisplayFinalSaleScreen()
@@ -572,14 +573,6 @@ namespace Pictures
 
         private void PreviousButton_Click(object sender, EventArgs e)
         {
-            if (currentScreenType == "FinalSale" && currentModifierIndex > 0 && currentModifierIndex <= currentModifierCodes.Count)
-            {
-                currentModifierIndex--;
-                var modCode = currentModifierCodes[currentModifierIndex];
-                DisplayModifierDetails(modCode);
-                return;
-            }
-
             if (navigationHistory.Count > 0)
             {
                 var previousScreen = navigationHistory.Pop();
@@ -596,6 +589,20 @@ namespace Pictures
                             var modCode = currentModifierCodes[currentModifierIndex - 1];
                             ResetModifierSelectionState(modCode);
                             DisplayModifierDetails(modCode);
+                        }
+                        else if (navigationHistory.Count > 0)
+                        {
+                            previousScreen = navigationHistory.Pop();
+                            if (previousScreen.ScreenType == "Item")
+                            {
+                                RefreshItem(previousScreen.ScreenData);
+                                currentScreenType = "Item";
+                            }
+                            else
+                            {
+                                RefreshCategory(previousScreen.ScreenData);
+                                currentScreenType = "Category";
+                            }
                         }
                         break;
                     case "Category":
@@ -665,7 +672,16 @@ namespace Pictures
         private void UpdateNavigationButtons()
         {
             bool previousButtonVisible = (currentScreenType == "Modifier" && currentModifierIndex > 1) || currentScreenType == "FinalSale";
-            bool nextButtonVisible = currentScreenType == "Modifier" && currentModifierIndex < currentModifierCodes.Count && modifierData["data"].FirstOrDefault(m => m["modcode"]?.ToString() == currentModifierCodes[currentModifierIndex - 1])?["modchoice"]?.ToString() == "upsale";
+            bool nextButtonVisible = false;
+
+            if (currentScreenType == "Modifier" && currentModifierIndex <= currentModifierCodes.Count)
+            {
+                var modChoiceType = modifierData["data"].FirstOrDefault(m => m["modcode"]?.ToString() == currentModifierCodes[currentModifierIndex - 1])?["modchoice"]?.ToString();
+                if (modChoiceType == "one" || modChoiceType == "upsale")
+                {
+                    nextButtonVisible = true;
+                }
+            }
 
             previousButton.Visible = previousButtonVisible;
             nextButton.Visible = nextButtonVisible;
