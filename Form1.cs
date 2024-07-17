@@ -25,6 +25,7 @@ namespace Pictures
         private Dictionary<string, bool> modifierSelectionState;
         private Dictionary<string, Image> imageCache;
         private Label itemCountLabel;
+        private Label totalPriceLabel;
 
         // Constructor
         public Form1()
@@ -109,6 +110,15 @@ namespace Pictures
                 Location = new Point(1350, 680) // Position it below the ListView
             };
             this.Controls.Add(itemCountLabel);
+
+            // Initialize the total price label
+            totalPriceLabel = new Label
+            {
+                Text = "Total Price: $0.00",
+                AutoSize = true,
+                Location = new Point(1350, 710) // Position it below the item count label
+            };
+            this.Controls.Add(totalPriceLabel);
         }
 
         private void SetJsonPaths()
@@ -357,6 +367,7 @@ namespace Pictures
             modifierSelectionState.Clear();
             DisplayMainCategory();
             UpdateItemCount(); // Update item count when starting over
+            UpdateTotalPrice(); // Update total price when starting over
         }
 
         private void ClearOrderButton_Click(object sender, EventArgs e)
@@ -367,8 +378,9 @@ namespace Pictures
             // Reset previous selections
             ResetPreviousSelections();
 
-            // Update the item count
+            // Update the item count and total price
             UpdateItemCount();
+            UpdateTotalPrice();
 
             // Navigate back to the category screen
             DisplayMainCategory();
@@ -387,8 +399,9 @@ namespace Pictures
             // Reset previous selections
             ResetPreviousSelections();
 
-            // Update the item count
+            // Update the item count and total price
             UpdateItemCount();
+            UpdateTotalPrice();
 
             // Navigate back to the category screen
             DisplayMainCategory();
@@ -504,6 +517,7 @@ namespace Pictures
             selectionListView.Items.Add(listViewItem);
 
             UpdateItemCount();
+            UpdateTotalPrice();
         }
 
         // Modifier display methods
@@ -690,6 +704,7 @@ namespace Pictures
                 modifierSelectionState[detailDesc] = !modifierSelectionState[detailDesc];
                 UpdatePictureBoxSelectionState(pictureBox, modifierSelectionState[detailDesc], detailDesc, modCode);
                 UpdateSelectionListView(detailDesc, modifierSelectionState[detailDesc], modCode);
+                UpdateTotalPrice();
             }
         }
 
@@ -749,13 +764,22 @@ namespace Pictures
                 }
             }
 
-            UpdateItemCount();
+            UpdateTotalPrice();
         }
 
         private void UpdateItemCount()
         {
             int itemCount = selectionListView.Items.Cast<ListViewItem>().Count(item => !item.SubItems[1].Text.StartsWith("+"));
             itemCountLabel.Text = $"Total Items: {itemCount}";
+        }
+
+        private void UpdateTotalPrice()
+        {
+            decimal totalPrice = selectionListView.Items.Cast<ListViewItem>()
+                .Where(item => !string.IsNullOrEmpty(item.SubItems[2].Text))
+                .Sum(item => decimal.Parse(item.SubItems[2].Text.Replace("$", "").Trim()));
+
+            totalPriceLabel.Text = $"Total Price: ${totalPrice:F2}";
         }
 
         private void ResetModifierSelectionState(string modCode)
