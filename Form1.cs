@@ -10,6 +10,7 @@ namespace Pictures
 {
     public partial class Form1 : Form
     {
+        // Form fields
         private TableLayoutPanel panel;
         private Stack<NavigationEntry> navigationHistory;
         private Button nextButton, previousButton, startOverButton;
@@ -23,7 +24,9 @@ namespace Pictures
         private ListView selectionListView;
         private Dictionary<string, bool> modifierSelectionState;
         private Dictionary<string, Image> imageCache;
+        private Label itemCountLabel;
 
+        // Constructor
         public Form1()
         {
             InitializeComponent();
@@ -32,6 +35,7 @@ namespace Pictures
             CreateCategoryPictureBoxes();
         }
 
+        // Initialization methods
         private void InitializeForm()
         {
             this.WindowState = FormWindowState.Maximized;
@@ -42,14 +46,6 @@ namespace Pictures
             modifierSelectionState = new Dictionary<string, bool>();
             imageCache = new Dictionary<string, Image>();
             SetJsonPaths();
-        }
-
-        private void SetJsonPaths()
-        {
-            string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            jsonPath = Path.Combine(desktopPath, "formatted_items.txt");
-            modifierJsonPath = Path.Combine(desktopPath, "formatted_modifierDef.txt");
-            modifierDetailJsonPath = Path.Combine(desktopPath, "formatted_modifierDetail.txt");
         }
 
         private void InitializeNavigationButtons()
@@ -104,8 +100,26 @@ namespace Pictures
             selectionListView.Columns.Add("Item", 150);
             selectionListView.Columns.Add("Price", 100);
             this.Controls.Add(selectionListView);
+
+            // Initialize the item count label
+            itemCountLabel = new Label
+            {
+                Text = "Total Items: 0",
+                AutoSize = true,
+                Location = new Point(1350, 680) // Position it below the ListView
+            };
+            this.Controls.Add(itemCountLabel);
         }
 
+        private void SetJsonPaths()
+        {
+            string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            jsonPath = Path.Combine(desktopPath, "formatted_items.txt");
+            modifierJsonPath = Path.Combine(desktopPath, "formatted_modifierDef.txt");
+            modifierDetailJsonPath = Path.Combine(desktopPath, "formatted_modifierDetail.txt");
+        }
+
+        // Data loading methods
         private void LoadData()
         {
             itemData = LoadJsonData(jsonPath, "Item");
@@ -133,6 +147,7 @@ namespace Pictures
             }
         }
 
+        // Category and item display methods
         private void CreateCategoryPictureBoxes()
         {
             if (itemData == null) return;
@@ -260,6 +275,7 @@ namespace Pictures
             }
         }
 
+        // Event handlers
         private void CategoryPictureBox_Click(object sender, EventArgs e)
         {
             if (sender is PictureBox pictureBox)
@@ -272,6 +288,150 @@ namespace Pictures
             }
         }
 
+        private void ItemButton_Click(object sender, EventArgs e)
+        {
+            if (sender is Button button)
+            {
+                string itemTag = (string)button.Tag; // Retrieve the image name from the Tag property
+                navigationHistory.Push(new NavigationEntry("Category", previousCategory));
+                RefreshItem(itemTag);
+                DisplayItemModifiers(itemTag);
+            }
+        }
+
+        private void NextButton_Click(object sender, EventArgs e)
+        {
+            if (currentScreenType == "Modifier")
+            {
+                DisplayNextModifier();
+            }
+        }
+
+        private void PreviousButton_Click(object sender, EventArgs e)
+        {
+            if (navigationHistory.Count > 0)
+            {
+                var previousScreen = navigationHistory.Pop();
+                switch (currentScreenType)
+                {
+                    case "Item":
+                        RefreshCategory(previousScreen.ScreenData);
+                        currentScreenType = "Category";
+                        break;
+                    case "Modifier":
+                        if (currentModifierIndex > 1)
+                        {
+                            currentModifierIndex--;
+                            var modCode = currentModifierCodes[currentModifierIndex - 1];
+                            ResetModifierSelectionState(modCode);
+                            DisplayModifierDetails(modCode);
+                        }
+                        else if (navigationHistory.Count > 0)
+                        {
+                            previousScreen = navigationHistory.Pop();
+                            if (previousScreen.ScreenType == "Item")
+                            {
+                                RefreshItem(previousScreen.ScreenData);
+                                currentScreenType = "Item";
+                            }
+                            else
+                            {
+                                RefreshCategory(previousScreen.ScreenData);
+                                currentScreenType = "Category";
+                            }
+                        }
+                        break;
+                    case "Category":
+                        DisplayMainCategory();
+                        currentScreenType = "MainCategory";
+                        break;
+                }
+            }
+            UpdateNavigationButtons();
+        }
+
+        private void StartOverButton_Click(object sender, EventArgs e)
+        {
+            navigationHistory.Clear();
+            selectionListView.Items.Clear();
+            modifierSelectionState.Clear();
+            DisplayMainCategory();
+            UpdateItemCount(); // Update item count when starting over
+        }
+
+        private void ClearOrderButton_Click(object sender, EventArgs e)
+        {
+            // Clear the ListView
+            selectionListView.Items.Clear();
+
+            // Reset previous selections
+            ResetPreviousSelections();
+
+            // Update the item count
+            UpdateItemCount();
+
+            // Navigate back to the category screen
+            DisplayMainCategory();
+            currentScreenType = "MainCategory";
+            UpdateNavigationButtons();
+        }
+
+        private void FinishOrderButton_Click(object sender, EventArgs e)
+        {
+            // Write the order to a .txt file
+            WriteOrderToFile();
+
+            // Clear the ListView
+            selectionListView.Items.Clear();
+
+            // Reset previous selections
+            ResetPreviousSelections();
+
+            // Update the item count
+            UpdateItemCount();
+
+            // Navigate back to the category screen
+            DisplayMainCategory();
+            currentScreenType = "MainCategory";
+            UpdateNavigationButtons();
+        }
+
+        private void AddItemButton_Click(object sender, EventArgs e)
+        {
+            // Reset previous selections
+            ResetPreviousSelections();
+
+            // Navigate back to the category screen without clearing the ListView
+            DisplayMainCategory();
+            currentScreenType = "MainCategory";
+            UpdateNavigationButtons();
+        }
+
+        private void WriteOrderToFile()
+        {
+            string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            string orderFilePath = Path.Combine(desktopPath, "Order.txt");
+
+            using (StreamWriter writer = new StreamWriter(orderFilePath, true))
+            {
+                writer.WriteLine("Order Summary:");
+                writer.WriteLine("--------------");
+
+                foreach (ListViewItem item in selectionListView.Items)
+                {
+                    string qty = item.SubItems[0].Text;
+                    string itemName = item.SubItems[1].Text;
+                    string price = item.SubItems[2].Text;
+                    writer.WriteLine($"{qty} x {itemName} - ${price}");
+                }
+
+                writer.WriteLine();
+            }
+
+            MessageBox.Show($"Order has been saved to {orderFilePath}", "Order Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        // Refresh methods
         private void RefreshCategory(string category)
         {
             if (string.IsNullOrEmpty(category) || !categoryControls.ContainsKey(category)) return;
@@ -304,17 +464,6 @@ namespace Pictures
             currentScreenType = "Category";
             panel.Update();
             UpdateNavigationButtons();
-        }
-
-        private void ItemButton_Click(object sender, EventArgs e)
-        {
-            if (sender is Button button)
-            {
-                string itemTag = (string)button.Tag; // Retrieve the image name from the Tag property
-                navigationHistory.Push(new NavigationEntry("Category", previousCategory));
-                RefreshItem(itemTag);
-                DisplayItemModifiers(itemTag);
-            }
         }
 
         private void RefreshItem(string itemTag)
@@ -353,8 +502,11 @@ namespace Pictures
             listViewItem.SubItems.Add(itemName);
             listViewItem.SubItems.Add(itemPrice);
             selectionListView.Items.Add(listViewItem);
+
+            UpdateItemCount();
         }
 
+        // Modifier display methods
         private void DisplayItemModifiers(string itemTag)
         {
             var item = itemData["data"].FirstOrDefault(m => m["menuitem"]?.ToString() == itemTag);
@@ -469,8 +621,43 @@ namespace Pictures
                 AutoSize = true
             };
 
+            Button clearOrderButton = new Button
+            {
+                Text = "Clear Order",
+                Size = new Size(150, 50),
+                BackColor = Color.Black,
+                ForeColor = Color.White,
+                Font = new Font("Calibri", 12, FontStyle.Bold)
+            };
+            clearOrderButton.Click += ClearOrderButton_Click;
+
+            // Add Item button
+            Button addItemButton = new Button
+            {
+                Text = "Add Item",
+                Size = new Size(150, 50),
+                BackColor = Color.Black,
+                ForeColor = Color.White,
+                Font = new Font("Calibri", 12, FontStyle.Bold)
+            };
+            addItemButton.Click += AddItemButton_Click;
+
+            // Finish Order button
+            Button finishOrderButton = new Button
+            {
+                Text = "Finish Order",
+                Size = new Size(150, 50),
+                BackColor = Color.Black,
+                ForeColor = Color.White,
+                Font = new Font("Calibri", 12, FontStyle.Bold)
+            };
+            finishOrderButton.Click += FinishOrderButton_Click;
+
             FlowLayoutPanel finalPanel = CreateFlowLayoutPanel();
             finalPanel.Controls.Add(finalMessage);
+            finalPanel.Controls.Add(clearOrderButton);
+            finalPanel.Controls.Add(addItemButton);
+            finalPanel.Controls.Add(finishOrderButton); // Add the button to the panel
             panel.Controls.Add(finalPanel);
 
             currentScreenType = "FinalSale";
@@ -549,77 +736,26 @@ namespace Pictures
             if (isSelected)
             {
                 var listViewItem = new ListViewItem("1");
-                listViewItem.SubItems.Add(detailDesc);
+                listViewItem.SubItems.Add("+" + detailDesc); // Add a "+" before the modifier name
                 listViewItem.SubItems.Add(cost);
                 selectionListView.Items.Add(listViewItem);
             }
             else
             {
-                var itemToRemove = selectionListView.Items.Cast<ListViewItem>().FirstOrDefault(item => item.SubItems[1].Text == detailDesc);
+                var itemToRemove = selectionListView.Items.Cast<ListViewItem>().FirstOrDefault(item => item.SubItems[1].Text == "+" + detailDesc);
                 if (itemToRemove != null)
                 {
                     selectionListView.Items.Remove(itemToRemove);
                 }
             }
+
+            UpdateItemCount();
         }
 
-        private void NextButton_Click(object sender, EventArgs e)
+        private void UpdateItemCount()
         {
-            if (currentScreenType == "Modifier")
-            {
-                DisplayNextModifier();
-            }
-        }
-
-        private void PreviousButton_Click(object sender, EventArgs e)
-        {
-            if (navigationHistory.Count > 0)
-            {
-                var previousScreen = navigationHistory.Pop();
-                switch (currentScreenType)
-                {
-                    case "Item":
-                        RefreshCategory(previousScreen.ScreenData);
-                        currentScreenType = "Category";
-                        break;
-                    case "Modifier":
-                        if (currentModifierIndex > 1)
-                        {
-                            currentModifierIndex--;
-                            var modCode = currentModifierCodes[currentModifierIndex - 1];
-                            ResetModifierSelectionState(modCode);
-                            DisplayModifierDetails(modCode);
-                        }
-                        else if (navigationHistory.Count > 0)
-                        {
-                            previousScreen = navigationHistory.Pop();
-                            if (previousScreen.ScreenType == "Item")
-                            {
-                                RefreshItem(previousScreen.ScreenData);
-                                currentScreenType = "Item";
-                            }
-                            else
-                            {
-                                RefreshCategory(previousScreen.ScreenData);
-                                currentScreenType = "Category";
-                            }
-                        }
-                        break;
-                    case "Category":
-                        DisplayMainCategory();
-                        currentScreenType = "MainCategory";
-                        break;
-                }
-            }
-            UpdateNavigationButtons();
-        }
-
-        private void StartOverButton_Click(object sender, EventArgs e)
-        {
-            navigationHistory.Clear();
-            selectionListView.Items.Clear();
-            modifierSelectionState.Clear();
-            DisplayMainCategory();
+            int itemCount = selectionListView.Items.Cast<ListViewItem>().Count(item => !item.SubItems[1].Text.StartsWith("+"));
+            itemCountLabel.Text = $"Total Items: {itemCount}";
         }
 
         private void ResetModifierSelectionState(string modCode)
@@ -643,6 +779,16 @@ namespace Pictures
                     }
                 }
             }
+        }
+
+        private void ResetPreviousSelections()
+        {
+            // Clear the modifier selection state
+            modifierSelectionState.Clear();
+
+            // Reset any other necessary states here
+            currentModifierCodes.Clear();
+            currentModifierIndex = 0;
         }
 
         private void DisplayMainCategory()
@@ -688,6 +834,7 @@ namespace Pictures
         }
     }
 
+    // NavigationEntry class
     public class NavigationEntry
     {
         public string ScreenType { get; set; }
