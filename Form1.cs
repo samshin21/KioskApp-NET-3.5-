@@ -174,11 +174,10 @@ namespace Pictures
             categoryControls = new Dictionary<string, List<FlowLayoutPanel>>();
             categoryPanels = new List<FlowLayoutPanel>();
 
-            var categories = itemData["data"].Select(item => item["menucategory"]?.ToString()).Distinct();
+            var categories = new HashSet<string>(itemData["data"].Select(item => item["menucategory"]?.ToString()).Where(c => !string.IsNullOrEmpty(c)));
+
             foreach (var category in categories)
             {
-                if (string.IsNullOrEmpty(category)) continue;
-
                 string picturesFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
                 Image categoryImage = LoadImage(GetImagePath($"{category}.bmp", picturesFolder), category);
 
