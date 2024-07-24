@@ -27,7 +27,8 @@ namespace ThermalPrinterNetworkExample
             this.width = width;
             this.orderedItems = orderedItems;
         }
-        public void PrintReceipt(PrinterClient printerClient)
+
+        public void PrintReceipt(PrinterClient printerClient, int orderNumber)
         {
             printerClient.WriteBytes(27, 33, 0);  // ESC ! 0 (normal height and width)
             printerClient.WriteBytes(27, 97, 49);  // ESC a justification center  
@@ -41,13 +42,13 @@ namespace ThermalPrinterNetworkExample
 
             // Set double height for the order number
             printerClient.WriteBytes(27, 33, 16);  // ESC ! 16 (double height)
-            printerClient.WriteString("order number:  99999\n");
+            printerClient.WriteString($"order number: {orderNumber}\n");
 
             // Reset to normal height and width
             printerClient.WriteBytes(27, 33, 0);  // ESC ! 0 (normal height and width)
 
             printerClient.WriteString("------------------------------------------\n");
-            printerClient.WriteString("   order #  68\n");
+            printerClient.WriteString($"   order #  {orderNumber}\n");
 
             decimal subtotal = 0;
 
@@ -94,19 +95,4 @@ namespace ThermalPrinterNetworkExample
             printerClient.WriteBytes(29, 86, 0);  // ESC V 0 (full cut)
         }
     }
-        public class OrderedItem
-        {
-            public string ItemName { get; set; }
-            public int Quantity { get; set; }
-            public List<string> Modifiers { get; set; }
-            public string Price { get; set; }
-
-            public OrderedItem(string itemName, int quantity, List<string> modifiers, string price)
-            {
-                ItemName = itemName;
-                Quantity = quantity;
-                Modifiers = modifiers;
-                Price = price;
-            }
-        }
 }
