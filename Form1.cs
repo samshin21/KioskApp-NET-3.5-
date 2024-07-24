@@ -6,14 +6,14 @@ using System.Linq;
 using System.Windows.Forms;
 using Newtonsoft.Json.Linq;
 
-namespace Pictures
+namespace ThermalPrinterNetworkExample
 {
     public partial class Form1 : Form
     {
         // Form fields
         private TableLayoutPanel panel;
         private Stack<NavigationEntry> navigationHistory;
-        private Button nextButton, previousButton, startOverButton;
+        private Button nextButton, previousButton, startOverButton, finishOrderButton;
         private string jsonPath, modifierJsonPath, modifierDetailJsonPath;
         private Dictionary<string, List<FlowLayoutPanel>> categoryControls;
         private List<FlowLayoutPanel> categoryPanels;
@@ -26,6 +26,8 @@ namespace Pictures
         private Dictionary<string, Image> imageCache;
         private Label itemCountLabel;
         private Label totalPriceLabel;
+        private readonly string printerIpAddress = "192.168.1.199";
+        private readonly int printerPort = 9100;
 
         // Constructor
         public Form1()
@@ -58,6 +60,7 @@ namespace Pictures
             startOverButton = CreateNavigationButton("Start Over", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, StartOverButton_Click);
             previousButton = CreateNavigationButton("Previous", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, PreviousButton_Click, false);
             nextButton = CreateNavigationButton("Next", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, NextButton_Click, false);
+            finishOrderButton = CreateNavigationButton("Finish Order", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, FinishOrderButton_Click, false); // Updated to initialize finishOrderButton here
 
             PositionButtons(buttonWidth, buttonHeight, buttonSpacing);
             this.Resize += (sender, e) => PositionButtons(buttonWidth, buttonHeight, buttonSpacing);
@@ -85,6 +88,7 @@ namespace Pictures
             startOverButton.Location = new Point(startX, startY);
             previousButton.Location = new Point(startX + buttonWidth + buttonSpacing, startY);
             nextButton.Location = new Point(startX + 2 * (buttonWidth + buttonSpacing), startY);
+            finishOrderButton.Location = new Point(startX + 3 * (buttonWidth + buttonSpacing), startY);
         }
 
         private void InitializeSelectionListView()
@@ -127,6 +131,7 @@ namespace Pictures
             jsonPath = Path.Combine(desktopPath, "formatted_items.txt");
             modifierJsonPath = Path.Combine(desktopPath, "formatted_modifierDef.txt");
             modifierDetailJsonPath = Path.Combine(desktopPath, "formatted_modifierDetail.txt");
+
         }
 
         // Data loading methods
@@ -390,7 +395,41 @@ namespace Pictures
         private void FinishOrderButton_Click(object sender, EventArgs e)
         {
             // Write the order to a .txt file
-            WriteOrderToFile();
+            OrderSaver.SaveOrder(selectionListView);
+
+            // Extract the list of ordered items
+            List<OrderedItem> orderedItems = new List<OrderedItem>();
+
+            foreach (ListViewItem item in selectionListView.Items)
+            {
+                string itemName = item.SubItems[1].Text;
+                int quantity = int.Parse(item.SubItems[0].Text);
+                string price = item.SubItems[2].Text.Replace("$", "").Replace(",", "").Trim(); // Clean the price
+                List<string> modifiers = new List<string>();
+
+                // Assuming modifiers are stored in the Tag property of ListViewItem
+                if (item.Tag != null)
+                {
+                    modifiers = item.Tag as List<string>;
+                }
+
+                orderedItems.Add(new OrderedItem(itemName, quantity, modifiers, price));
+            }
+
+            // Extract receipt fields from JSON data
+            var receiptBuilder = ExtractReceiptFieldsFromJson(orderedItems);
+            if (receiptBuilder == null)
+            {
+                MessageBox.Show("Failed to extract receipt fields.");
+                return;
+            }
+
+            // Send the receipt to the printer
+            using (var printerClient = new PrinterClient(printerIpAddress, printerPort))
+            {
+                printerClient.Connect();
+                receiptBuilder.PrintReceipt(printerClient);
+            }
 
             // Clear the ListView
             selectionListView.Items.Clear();
@@ -417,30 +456,6 @@ namespace Pictures
             DisplayMainCategory();
             currentScreenType = "MainCategory";
             UpdateNavigationButtons();
-        }
-
-        private void WriteOrderToFile()
-        {
-            string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            string orderFilePath = Path.Combine(desktopPath, "Order.txt");
-
-            using (StreamWriter writer = new StreamWriter(orderFilePath, true))
-            {
-                writer.WriteLine("Order Summary:");
-                writer.WriteLine("--------------");
-
-                foreach (ListViewItem item in selectionListView.Items)
-                {
-                    string qty = item.SubItems[0].Text;
-                    string itemName = item.SubItems[1].Text;
-                    string price = item.SubItems[2].Text;
-                    writer.WriteLine($"{qty} x {itemName} - ${price}");
-                }
-
-                writer.WriteLine();
-            }
-
-            MessageBox.Show($"Order has been saved to {orderFilePath}", "Order Saved", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         // Refresh methods
@@ -655,22 +670,12 @@ namespace Pictures
             };
             addItemButton.Click += AddItemButton_Click;
 
-            // Finish Order button
-            Button finishOrderButton = new Button
-            {
-                Text = "Finish Order",
-                Size = new Size(150, 50),
-                BackColor = Color.Black,
-                ForeColor = Color.White,
-                Font = new Font("Calibri", 12, FontStyle.Bold)
-            };
-            finishOrderButton.Click += FinishOrderButton_Click;
-
             FlowLayoutPanel finalPanel = CreateFlowLayoutPanel();
             finalPanel.Controls.Add(finalMessage);
             finalPanel.Controls.Add(clearOrderButton);
             finalPanel.Controls.Add(addItemButton);
-            finalPanel.Controls.Add(finishOrderButton); // Add the button to the panel
+            finalPanel.Controls.Add(finishOrderButton); // Use the existing finishOrderButton
+
             panel.Controls.Add(finalPanel);
 
             currentScreenType = "FinalSale";
@@ -854,19 +859,55 @@ namespace Pictures
 
             previousButton.Visible = previousButtonVisible;
             nextButton.Visible = nextButtonVisible;
+
+            // Ensure the finish order button is visible when on the final sale screen
+            finishOrderButton.Visible = currentScreenType == "FinalSale";
         }
-    }
 
-    // NavigationEntry class
-    public class NavigationEntry
-    {
-        public string ScreenType { get; set; }
-        public string ScreenData { get; set; }
-
-        public NavigationEntry(string screenType, string screenData)
+        private ReceiptBuilder ExtractReceiptFieldsFromJson(List<OrderedItem> orderedItems)
         {
-            ScreenType = screenType;
-            ScreenData = screenData;
+            if (itemData == null || !itemData["data"].Any())
+            {
+                MessageBox.Show("Item data not loaded or empty.");
+                return null;
+            }
+
+            // Assuming the first item contains the necessary store information
+            var firstItem = itemData["data"].First();
+
+            string tempPrinter = "TEMP_PRINTER";  // Default value
+            string storeName = "Store Name";  // Default value
+            string address1 = "1234 Main St, Anytown, USA";  // Default value
+            string address2 = "AnyCity, PA 10001"; // Default value
+            string phoneNumber = "215-555-4444";  // Default value
+
+            // Extract store name and address from storename field
+            string storenameField = firstItem["storename"]?.ToString();
+            if (!string.IsNullOrEmpty(storenameField))
+            {
+                var parts = storenameField.Split('_');
+                if (parts.Length > 0) storeName = parts[0];
+                if (parts.Length > 1) address1 = parts[1];
+            }
+
+            string barcodeSize = "100";  // Default value
+            string priceBar = "123456789012";  // Default value
+            string barcodeWidth = "1";  // Default value
+
+            return new ReceiptBuilder(tempPrinter, storeName, address1, address2, phoneNumber, barcodeSize, priceBar, barcodeWidth, orderedItems);
+        }
+
+        // NavigationEntry class
+        public class NavigationEntry
+        {
+            public string ScreenType { get; set; }
+            public string ScreenData { get; set; }
+
+            public NavigationEntry(string screenType, string screenData)
+            {
+                ScreenType = screenType;
+                ScreenData = screenData;
+            }
         }
     }
 }
