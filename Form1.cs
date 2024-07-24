@@ -10,11 +10,9 @@ namespace ThermalPrinterNetworkExample
 {
     public partial class Form1 : Form
     {
-        // Form fields
         private TableLayoutPanel panel;
         private Stack<NavigationEntry> navigationHistory;
-        private Button nextButton, previousButton, startOverButton, finishOrderButton;
-        private string jsonPath, modifierJsonPath, modifierDetailJsonPath;
+        private Button nextButton, previousButton, startOverButton, finishOrderButton, httpCallButton;
         private Dictionary<string, List<FlowLayoutPanel>> categoryControls;
         private List<FlowLayoutPanel> categoryPanels;
         private JObject itemData, modifierData, modifierDetailData;
@@ -24,12 +22,10 @@ namespace ThermalPrinterNetworkExample
         private ListView selectionListView;
         private Dictionary<string, bool> modifierSelectionState;
         private Dictionary<string, Image> imageCache;
-        private Label itemCountLabel;
-        private Label totalPriceLabel;
+        private Label itemCountLabel, totalPriceLabel;
         private readonly string printerIpAddress = "192.168.1.199";
         private readonly int printerPort = 9100;
 
-        // Constructor
         public Form1()
         {
             InitializeComponent();
@@ -38,7 +34,6 @@ namespace ThermalPrinterNetworkExample
             CreateCategoryPictureBoxes();
         }
 
-        // Initialization methods
         private void InitializeForm()
         {
             this.WindowState = FormWindowState.Maximized;
@@ -48,32 +43,30 @@ namespace ThermalPrinterNetworkExample
             navigationHistory = new Stack<NavigationEntry>();
             modifierSelectionState = new Dictionary<string, bool>();
             imageCache = new Dictionary<string, Image>();
-            SetJsonPaths();
         }
 
         private void InitializeNavigationButtons()
         {
             int buttonWidth = 150, buttonHeight = 100, buttonSpacing = 10;
-            Color buttonBackColor = Color.Black, buttonForeColor = Color.White;
             Font buttonFont = new Font("Calibri", 12, FontStyle.Bold);
-
-            startOverButton = CreateNavigationButton("Start Over", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, StartOverButton_Click);
-            previousButton = CreateNavigationButton("Previous", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, PreviousButton_Click, false);
-            nextButton = CreateNavigationButton("Next", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, NextButton_Click, false);
-            finishOrderButton = CreateNavigationButton("Finish Order", buttonWidth, buttonHeight, buttonBackColor, buttonForeColor, buttonFont, FinishOrderButton_Click, false); // Updated to initialize finishOrderButton here
+            startOverButton = CreateNavigationButton("Start Over", buttonWidth, buttonHeight, buttonFont, StartOverButton_Click);
+            previousButton = CreateNavigationButton("Previous", buttonWidth, buttonHeight, buttonFont, PreviousButton_Click, false);
+            nextButton = CreateNavigationButton("Next", buttonWidth, buttonHeight, buttonFont, NextButton_Click, false);
+            finishOrderButton = CreateNavigationButton("Finish Order", buttonWidth, buttonHeight, buttonFont, FinishOrderButton_Click, true);
+            httpCallButton = CreateNavigationButton("Make HTTP Call", buttonWidth, buttonHeight, buttonFont, HttpCallButton_Click, true); // New button
 
             PositionButtons(buttonWidth, buttonHeight, buttonSpacing);
             this.Resize += (sender, e) => PositionButtons(buttonWidth, buttonHeight, buttonSpacing);
         }
 
-        private Button CreateNavigationButton(string text, int width, int height, Color backColor, Color foreColor, Font font, EventHandler onClick, bool visible = true)
+        private Button CreateNavigationButton(string text, int width, int height, Font font, EventHandler onClick, bool visible = true)
         {
             var button = new Button
             {
                 Text = text,
                 Size = new Size(width, height),
-                BackColor = backColor,
-                ForeColor = foreColor,
+                BackColor = Color.Black,
+                ForeColor = Color.White,
                 Font = font,
                 Visible = visible
             };
@@ -89,6 +82,7 @@ namespace ThermalPrinterNetworkExample
             previousButton.Location = new Point(startX + buttonWidth + buttonSpacing, startY);
             nextButton.Location = new Point(startX + 2 * (buttonWidth + buttonSpacing), startY);
             finishOrderButton.Location = new Point(startX + 3 * (buttonWidth + buttonSpacing), startY);
+            httpCallButton.Location = new Point(startX + 4 * (buttonWidth + buttonSpacing), startY); // New button position
         }
 
         private void InitializeSelectionListView()
@@ -106,87 +100,41 @@ namespace ThermalPrinterNetworkExample
             selectionListView.Columns.Add("Price", 100);
             this.Controls.Add(selectionListView);
 
-            // Initialize the item count label
-            itemCountLabel = new Label
-            {
-                Text = "Total Items: 0",
-                AutoSize = true,
-                Location = new Point(1350, 680) // Position it below the ListView
-            };
+            itemCountLabel = new Label { Text = "Total Items: 0", AutoSize = true, Location = new Point(1350, 680) };
+            totalPriceLabel = new Label { Text = "Total Price: $0.00", AutoSize = true, Location = new Point(1350, 710) };
             this.Controls.Add(itemCountLabel);
-
-            // Initialize the total price label
-            totalPriceLabel = new Label
-            {
-                Text = "Total Price: $0.00",
-                AutoSize = true,
-                Location = new Point(1350, 710) // Position it below the item count label
-            };
             this.Controls.Add(totalPriceLabel);
         }
 
-        private void SetJsonPaths()
-        {
-            string desktopPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            jsonPath = Path.Combine(desktopPath, "formatted_items.txt");
-            modifierJsonPath = Path.Combine(desktopPath, "formatted_modifierDef.txt");
-            modifierDetailJsonPath = Path.Combine(desktopPath, "formatted_modifierDetail.txt");
-
-        }
-
-        // Data loading methods
         private void LoadData()
         {
-            itemData = LoadJsonData(jsonPath, "Item");
-            modifierData = LoadJsonData(modifierJsonPath, "Modifier");
-            modifierDetailData = LoadJsonData(modifierDetailJsonPath, "Modifier Detail");
+            itemData = LoadJsonData("formatted_items.txt");
+            modifierData = LoadJsonData("formatted_modifierDef.txt");
+            modifierDetailData = LoadJsonData("formatted_modifierDetail.txt");
         }
 
-        private JObject LoadJsonData(string path, string dataType)
+        private JObject LoadJsonData(string fileName)
         {
-            if (!File.Exists(path))
-            {
-                MessageBox.Show($"{dataType} JSON file not found: {path}");
-                return null;
-            }
-
-            try
-            {
-                string json = File.ReadAllText(path);
-                return JObject.Parse(json);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Failed to load {dataType} JSON file: {ex.Message}");
-                return null;
-            }
+            string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), fileName);
+            return File.Exists(path) ? JObject.Parse(File.ReadAllText(path)) : null;
         }
 
-        // Category and item display methods
         private void CreateCategoryPictureBoxes()
         {
             if (itemData == null) return;
 
-            panel = new TableLayoutPanel
-            {
-                AutoSize = true,
-                ColumnCount = 7,
-                Padding = new Padding(10),
-                Dock = DockStyle.Fill
-            };
+            panel = new TableLayoutPanel { AutoSize = true, ColumnCount = 7, Padding = new Padding(10), Dock = DockStyle.Fill };
             this.Controls.Add(panel);
-
             categoryControls = new Dictionary<string, List<FlowLayoutPanel>>();
             categoryPanels = new List<FlowLayoutPanel>();
 
             var categories = new HashSet<string>(itemData["data"].Select(item => item["menucategory"]?.ToString()).Where(c => !string.IsNullOrEmpty(c)));
-
             foreach (var category in categories)
             {
-                string picturesFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
-                Image categoryImage = LoadImage(GetImagePath($"{category}.bmp", picturesFolder), category);
+                string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
+                Image categoryImage = LoadImage(GetImagePath($"{category}.bmp", folder));
 
-                PictureBox categoryPictureBox = CreatePictureBox(category, categoryImage, category, CategoryPictureBox_Click);
+                PictureBox categoryPictureBox = CreatePictureBox(category, categoryImage, CategoryPictureBox_Click);
                 Label categoryLabel = CreateLabel(category);
 
                 FlowLayoutPanel categoryPanel = CreateFlowLayoutPanel();
@@ -196,13 +144,10 @@ namespace ThermalPrinterNetworkExample
 
                 categoryPanels.Add(categoryPanel);
                 categoryControls[category] = new List<FlowLayoutPanel>();
-
-                // Log the loading of category images
-                Console.WriteLine($"[CreateCategoryPictureBoxes] {DateTime.Now}: Loaded image for category: {category}, Path: {GetImagePath($"{category}.bmp", picturesFolder)}");
             }
         }
 
-        private PictureBox CreatePictureBox(string name, Image image, string tag, EventHandler onClick)
+        private PictureBox CreatePictureBox(string name, Image image, EventHandler onClick)
         {
             var pictureBox = new PictureBox
             {
@@ -211,23 +156,13 @@ namespace ThermalPrinterNetworkExample
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 Image = image,
                 Margin = new Padding(0, 0, 0, 5),
-                Padding = new Padding(0),
-                Tag = tag // Store the image name in the Tag property
+                Tag = name
             };
             pictureBox.Click += onClick;
             return pictureBox;
         }
 
-        private Label CreateLabel(string text)
-        {
-            return new Label
-            {
-                Text = text,
-                AutoSize = true,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Margin = new Padding(0, 5, 0, 0)
-            };
-        }
+        private Label CreateLabel(string text) => new Label { Text = text, AutoSize = true, TextAlign = ContentAlignment.MiddleCenter, Margin = new Padding(0, 5, 0, 0) };
 
         private Button CreateItemButton(string text, string tag, EventHandler onClick)
         {
@@ -237,59 +172,27 @@ namespace ThermalPrinterNetworkExample
                 Size = new Size(158, 118),
                 BackColor = Color.Black,
                 ForeColor = Color.White,
-                Tag = tag, // Store the image name in the Tag property
+                Tag = tag,
                 Padding = new Padding(5)
             };
             button.Click += onClick;
             return button;
         }
 
-        private FlowLayoutPanel CreateFlowLayoutPanel()
-        {
-            return new FlowLayoutPanel
-            {
-                FlowDirection = FlowDirection.TopDown,
-                AutoSize = true,
-                Margin = new Padding(10)
-            };
-        }
+        private FlowLayoutPanel CreateFlowLayoutPanel() => new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, Margin = new Padding(10) };
 
-        private string GetImagePath(string fileName, string folder)
-        {
-            string fullPath = Path.Combine(folder, fileName.ToLower());
-            return File.Exists(fullPath) ? fullPath : Path.Combine(folder, "image not avail.bmp");
-        }
+        private string GetImagePath(string fileName, string folder) => File.Exists(Path.Combine(folder, fileName.ToLower())) ? Path.Combine(folder, fileName.ToLower()) : Path.Combine(folder, "image not avail.bmp");
 
-        private Image LoadImage(string path, string pictureBoxName)
+        private Image LoadImage(string path)
         {
-            if (imageCache.ContainsKey(path))
+            if (!imageCache.TryGetValue(path, out var image))
             {
-                Console.WriteLine($"[LoadImage] {DateTime.Now}: Using cached image: {path} | {pictureBoxName}");
-                return imageCache[path];
-            }
-
-            try
-            {
-                Image image = Image.FromFile(path);
+                image = Image.FromFile(path);
                 imageCache[path] = image;
-                Console.WriteLine($"[LoadImage] {DateTime.Now}: Successfully loaded image: {path} | {pictureBoxName}"); // Log successful image load
-                return image;
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[LoadImage] {DateTime.Now}: Failed to load image: {path}, Error: {ex.Message} | {pictureBoxName}"); // Log image load failure
-                string fallbackPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject");
-                fallbackPath = Path.Combine(fallbackPath, "image not avail.bmp");
-                if (!imageCache.ContainsKey(fallbackPath))
-                {
-                    imageCache[fallbackPath] = Image.FromFile(fallbackPath);
-                    Console.WriteLine($"[LoadImage] {DateTime.Now}: Using fallback image: {fallbackPath} | {pictureBoxName}"); // Log fallback image usage
-                }
-                return imageCache[fallbackPath];
-            }
+            return image;
         }
 
-        // Event handlers
         private void CategoryPictureBox_Click(object sender, EventArgs e)
         {
             if (sender is PictureBox pictureBox)
@@ -306,7 +209,7 @@ namespace ThermalPrinterNetworkExample
         {
             if (sender is Button button)
             {
-                string itemTag = (string)button.Tag; // Retrieve the image name from the Tag property
+                string itemTag = (string)button.Tag;
                 navigationHistory.Push(new NavigationEntry("Category", previousCategory));
                 RefreshItem(itemTag);
                 DisplayItemModifiers(itemTag);
@@ -315,10 +218,7 @@ namespace ThermalPrinterNetworkExample
 
         private void NextButton_Click(object sender, EventArgs e)
         {
-            if (currentScreenType == "Modifier")
-            {
-                DisplayNextModifier();
-            }
+            if (currentScreenType == "Modifier") DisplayNextModifier();
         }
 
         private void PreviousButton_Click(object sender, EventArgs e)
@@ -370,23 +270,16 @@ namespace ThermalPrinterNetworkExample
             selectionListView.Items.Clear();
             modifierSelectionState.Clear();
             DisplayMainCategory();
-            UpdateItemCount(); // Update item count when starting over
-            UpdateTotalPrice(); // Update total price when starting over
+            UpdateItemCount();
+            UpdateTotalPrice();
         }
 
         private void ClearOrderButton_Click(object sender, EventArgs e)
         {
-            // Clear the ListView
             selectionListView.Items.Clear();
-
-            // Reset previous selections
             ResetPreviousSelections();
-
-            // Update the item count and total price
             UpdateItemCount();
             UpdateTotalPrice();
-
-            // Navigate back to the category screen
             DisplayMainCategory();
             currentScreenType = "MainCategory";
             UpdateNavigationButtons();
@@ -394,29 +287,8 @@ namespace ThermalPrinterNetworkExample
 
         private void FinishOrderButton_Click(object sender, EventArgs e)
         {
-            // Write the order to a .txt file
-            OrderSaver.SaveOrder(selectionListView);
+            List<OrderedItem> orderedItems = selectionListView.Items.Cast<ListViewItem>().Select(item => new OrderedItem(item.SubItems[1].Text, int.Parse(item.SubItems[0].Text), item.Tag as List<string> ?? new List<string>(), item.SubItems[2].Text.Replace("$", "").Replace(",", "").Trim())).ToList();
 
-            // Extract the list of ordered items
-            List<OrderedItem> orderedItems = new List<OrderedItem>();
-
-            foreach (ListViewItem item in selectionListView.Items)
-            {
-                string itemName = item.SubItems[1].Text;
-                int quantity = int.Parse(item.SubItems[0].Text);
-                string price = item.SubItems[2].Text.Replace("$", "").Replace(",", "").Trim(); // Clean the price
-                List<string> modifiers = new List<string>();
-
-                // Assuming modifiers are stored in the Tag property of ListViewItem
-                if (item.Tag != null)
-                {
-                    modifiers = item.Tag as List<string>;
-                }
-
-                orderedItems.Add(new OrderedItem(itemName, quantity, modifiers, price));
-            }
-
-            // Extract receipt fields from JSON data
             var receiptBuilder = ExtractReceiptFieldsFromJson(orderedItems);
             if (receiptBuilder == null)
             {
@@ -424,24 +296,22 @@ namespace ThermalPrinterNetworkExample
                 return;
             }
 
-            // Send the receipt to the printer
+            // Get the next order number
+            int orderNumber = OrderNumberManager.GetNextOrderNumber();
+
             using (var printerClient = new PrinterClient(printerIpAddress, printerPort))
             {
                 printerClient.Connect();
-                receiptBuilder.PrintReceipt(printerClient);
+                receiptBuilder.PrintReceipt(printerClient, orderNumber);
             }
 
-            // Clear the ListView
+            // Make HTTP call with the order number
+            HttpService.MakeHttpCall(orderNumber.ToString());
+
             selectionListView.Items.Clear();
-
-            // Reset previous selections
             ResetPreviousSelections();
-
-            // Update the item count and total price
             UpdateItemCount();
             UpdateTotalPrice();
-
-            // Navigate back to the category screen
             DisplayMainCategory();
             currentScreenType = "MainCategory";
             UpdateNavigationButtons();
@@ -449,42 +319,31 @@ namespace ThermalPrinterNetworkExample
 
         private void AddItemButton_Click(object sender, EventArgs e)
         {
-            // Reset previous selections
             ResetPreviousSelections();
-
-            // Navigate back to the category screen without clearing the ListView
             DisplayMainCategory();
             currentScreenType = "MainCategory";
             UpdateNavigationButtons();
         }
 
-        // Refresh methods
         private void RefreshCategory(string category)
         {
             if (string.IsNullOrEmpty(category) || !categoryControls.ContainsKey(category)) return;
-
             panel.Controls.Clear();
             panel.ColumnStyles.Clear();
             panel.RowStyles.Clear();
             panel.ColumnCount = 7;
 
             var items = itemData["data"].Where(item => item["menucategory"]?.ToString() == category);
-
             foreach (var item in items)
             {
                 string itemName = item["menuitem"]?.ToString();
                 if (string.IsNullOrEmpty(itemName)) continue;
 
                 Button itemButton = CreateItemButton(itemName, itemName, ItemButton_Click);
-
                 FlowLayoutPanel itemPanel = CreateFlowLayoutPanel();
                 itemPanel.Controls.Add(itemButton);
-
                 categoryControls[category].Add(itemPanel);
                 panel.Controls.Add(itemPanel);
-
-                // Log the loading of item buttons
-                Console.WriteLine($"[RefreshCategory] {DateTime.Now}: Loaded button for item: {itemName}");
             }
 
             previousCategory = category;
@@ -503,23 +362,17 @@ namespace ThermalPrinterNetworkExample
             panel.ColumnCount = 7;
 
             var item = itemData["data"].FirstOrDefault(m => m["menuitem"]?.ToString() == itemTag);
-
             if (item != null)
             {
                 string itemName = item["menuitem"].ToString();
                 string itemPrice = item["itemprice"].ToString();
 
                 Button itemButton = CreateItemButton(itemName, itemName, null);
-
                 FlowLayoutPanel itemPanel = CreateFlowLayoutPanel();
                 itemPanel.Controls.Add(itemButton);
-
                 panel.Controls.Add(itemPanel, 0, 0);
 
                 AddItemToSelectionListView(itemName, itemPrice);
-
-                // Log the loading of item buttons
-                Console.WriteLine($"[RefreshItem] {DateTime.Now}: Loaded button for item: {itemName}");
             }
         }
 
@@ -529,12 +382,10 @@ namespace ThermalPrinterNetworkExample
             listViewItem.SubItems.Add(itemName);
             listViewItem.SubItems.Add(itemPrice);
             selectionListView.Items.Add(listViewItem);
-
             UpdateItemCount();
             UpdateTotalPrice();
         }
 
-        // Modifier display methods
         private void DisplayItemModifiers(string itemTag)
         {
             var item = itemData["data"].FirstOrDefault(m => m["menuitem"]?.ToString() == itemTag);
@@ -551,14 +402,9 @@ namespace ThermalPrinterNetworkExample
                     string modCode = item[section].ToString();
                     currentModifierCodes.Add(modCode);
                     if (!modifierData["data"].Any(m => m["modcode"]?.ToString() == modCode))
-                    {
                         missingModifiers.Add(modCode);
-                    }
                 }
             }
-
-            // Log the modifiers to the console
-            Console.WriteLine($"[DisplayItemModifiers] {DateTime.Now}: Modifiers for item '{itemTag}': {string.Join(", ", currentModifierCodes.ToArray())}");
 
             if (missingModifiers.Count > 0)
             {
@@ -569,7 +415,6 @@ namespace ThermalPrinterNetworkExample
             currentModifierIndex = 0;
             previousCategory = item["menucategory"].ToString();
             navigationHistory.Push(new NavigationEntry("Item", itemTag));
-
             DisplayNextModifier();
         }
 
@@ -581,20 +426,15 @@ namespace ThermalPrinterNetworkExample
                 return;
             }
 
-            string modCode = currentModifierCodes[currentModifierIndex];
-            currentModifierIndex++;
-
+            string modCode = currentModifierCodes[currentModifierIndex++];
             var modifierDef = modifierData["data"].FirstOrDefault(m => m["modcode"]?.ToString() == modCode);
-
             if (modifierDef != null)
             {
                 navigationHistory.Push(new NavigationEntry("Modifier", modCode));
                 DisplayModifierDetails(modCode);
             }
             else
-            {
                 DisplayNextModifier();
-            }
 
             currentScreenType = "Modifier";
             UpdateNavigationButtons();
@@ -603,7 +443,6 @@ namespace ThermalPrinterNetworkExample
         private void DisplayModifierDetails(string modCode)
         {
             panel.Controls.Clear();
-
             var modifierDef = modifierData["data"].FirstOrDefault(m => m["modcode"]?.ToString() == modCode);
             if (modifierDef == null) return;
 
@@ -615,9 +454,9 @@ namespace ThermalPrinterNetworkExample
                 string detailDesc = detail["description"]?.ToString() ?? "Unknown Detail";
                 string cost = detail["cost"]?.ToString() ?? "";
                 string imagePath = GetImagePath(detail["location"]?.ToString() ?? "image not avail.bmp", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject"));
-                Image detailImage = LoadImage(imagePath, detailDesc);
+                Image detailImage = LoadImage(imagePath);
 
-                PictureBox detailPictureBox = CreatePictureBox(detailDesc, detailImage, detailDesc, modChoiceType == "one" ? (EventHandler)((s, e) => ModifierDetailPictureBox_Click_One(s, e, modCode)) : (EventHandler)((s, e) => ModifierDetailPictureBox_Click_Upsale(s, e, modCode)));
+                PictureBox detailPictureBox = CreatePictureBox(detailDesc, detailImage, modChoiceType == "one" ? (EventHandler)((s, e) => ModifierDetailPictureBox_Click_One(s, e, modCode)) : (EventHandler)((s, e) => ModifierDetailPictureBox_Click_Upsale(s, e, modCode)));
                 Label detailLabel = CreateLabel(string.IsNullOrEmpty(cost) ? detailDesc : $"{detailDesc} (+${cost})");
 
                 FlowLayoutPanel detailPanel = CreateFlowLayoutPanel();
@@ -625,13 +464,10 @@ namespace ThermalPrinterNetworkExample
                 detailPanel.Controls.Add(detailLabel);
 
                 panel.Controls.Add(detailPanel);
-
                 if (!modifierSelectionState.ContainsKey(detailDesc))
-                {
                     modifierSelectionState[detailDesc] = false;
-                }
 
-                UpdatePictureBoxSelectionState(detailPictureBox, modifierSelectionState[detailDesc], detailDesc, modCode);
+                UpdatePictureBoxSelectionState(detailPictureBox, modifierSelectionState[detailDesc], modCode);
             }
 
             currentScreenType = "Modifier";
@@ -641,43 +477,13 @@ namespace ThermalPrinterNetworkExample
         private void DisplayFinalSaleScreen()
         {
             panel.Controls.Clear();
-
-            Label finalMessage = new Label
-            {
-                Text = "Thank you for your purchase!",
-                Font = new Font("Arial", 24, FontStyle.Bold),
-                AutoSize = true
-            };
-
-            Button clearOrderButton = new Button
-            {
-                Text = "Clear Order",
-                Size = new Size(150, 50),
-                BackColor = Color.Black,
-                ForeColor = Color.White,
-                Font = new Font("Calibri", 12, FontStyle.Bold)
-            };
-            clearOrderButton.Click += ClearOrderButton_Click;
-
-            // Add Item button
-            Button addItemButton = new Button
-            {
-                Text = "Add Item",
-                Size = new Size(150, 50),
-                BackColor = Color.Black,
-                ForeColor = Color.White,
-                Font = new Font("Calibri", 12, FontStyle.Bold)
-            };
-            addItemButton.Click += AddItemButton_Click;
-
-            FlowLayoutPanel finalPanel = CreateFlowLayoutPanel();
-            finalPanel.Controls.Add(finalMessage);
-            finalPanel.Controls.Add(clearOrderButton);
-            finalPanel.Controls.Add(addItemButton);
-            finalPanel.Controls.Add(finishOrderButton); // Use the existing finishOrderButton
+            var finalPanel = CreateFlowLayoutPanel();
+            finalPanel.Controls.Add(new Label { Text = "Thank you for your purchase!", Font = new Font("Arial", 24, FontStyle.Bold), AutoSize = true });
+            finalPanel.Controls.Add(CreateNavigationButton("Clear Order", 150, 50, new Font("Calibri", 12, FontStyle.Bold), ClearOrderButton_Click));
+            finalPanel.Controls.Add(CreateNavigationButton("Add Item", 150, 50, new Font("Calibri", 12, FontStyle.Bold), AddItemButton_Click));
+            finalPanel.Controls.Add(finishOrderButton);
 
             panel.Controls.Add(finalPanel);
-
             currentScreenType = "FinalSale";
             UpdateNavigationButtons();
         }
@@ -706,45 +512,28 @@ namespace ThermalPrinterNetworkExample
             if (modifierSelectionState.ContainsKey(detailDesc))
             {
                 modifierSelectionState[detailDesc] = !modifierSelectionState[detailDesc];
-                UpdatePictureBoxSelectionState(pictureBox, modifierSelectionState[detailDesc], detailDesc, modCode);
+                UpdatePictureBoxSelectionState(pictureBox, modifierSelectionState[detailDesc], modCode);
                 UpdateSelectionListView(detailDesc, modifierSelectionState[detailDesc], modCode);
                 UpdateTotalPrice();
             }
         }
 
-        private void UpdatePictureBoxSelectionState(PictureBox pictureBox, bool isSelected, string detailDesc, string modCode)
+        private void UpdatePictureBoxSelectionState(PictureBox pictureBox, bool isSelected, string modCode)
         {
             var modifierDef = modifierData["data"].FirstOrDefault(m => m["modcode"]?.ToString() == modCode);
             if (modifierDef == null) return;
 
             string modChoiceType = modifierDef["modchoice"]?.ToString() ?? "one";
-            if (modChoiceType == "upsale")
-            {
-                pictureBox.Image = isSelected ? CreateOverlayImage(pictureBox.Image) : ReloadImage((string)pictureBox.Tag);
-            }
-            else
-            {
-                pictureBox.BackColor = isSelected ? Color.Green : Color.Transparent;
-            }
+            pictureBox.Image = isSelected && modChoiceType == "upsale" ? CreateOverlayImage(pictureBox.Image) : LoadImage(GetImagePath($"{pictureBox.Tag}.bmp", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject")));
+            pictureBox.BackColor = isSelected && modChoiceType != "upsale" ? Color.Green : Color.Transparent;
         }
 
         private Image CreateOverlayImage(Image originalImage)
         {
             Bitmap overlayImage = new Bitmap(originalImage);
             using (Graphics g = Graphics.FromImage(overlayImage))
-            {
-                using (Brush brush = new SolidBrush(Color.FromArgb(128, Color.Yellow)))
-                {
-                    g.FillRectangle(brush, new Rectangle(0, 0, overlayImage.Width, overlayImage.Height));
-                }
-            }
+                g.FillRectangle(new SolidBrush(Color.FromArgb(128, Color.Yellow)), new Rectangle(0, 0, overlayImage.Width, overlayImage.Height));
             return overlayImage;
-        }
-
-        private Image ReloadImage(string imageName)
-        {
-            string imagePath = GetImagePath($"{imageName}.bmp", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "KioskProject"));
-            return LoadImage(imagePath, imageName);
         }
 
         private void UpdateSelectionListView(string detailDesc, bool isSelected, string modCode)
@@ -754,37 +543,22 @@ namespace ThermalPrinterNetworkExample
 
             if (isSelected)
             {
-                var listViewItem = new ListViewItem("1");
-                listViewItem.SubItems.Add("+" + detailDesc); // Add a "+" before the modifier name
+                var listViewItem = new ListViewItem("1") { Tag = modCode };
+                listViewItem.SubItems.Add("+" + detailDesc);
                 listViewItem.SubItems.Add(cost);
                 selectionListView.Items.Add(listViewItem);
             }
             else
             {
                 var itemToRemove = selectionListView.Items.Cast<ListViewItem>().FirstOrDefault(item => item.SubItems[1].Text == "+" + detailDesc);
-                if (itemToRemove != null)
-                {
-                    selectionListView.Items.Remove(itemToRemove);
-                }
+                if (itemToRemove != null) selectionListView.Items.Remove(itemToRemove);
             }
-
             UpdateTotalPrice();
         }
 
-        private void UpdateItemCount()
-        {
-            int itemCount = selectionListView.Items.Cast<ListViewItem>().Count(item => !item.SubItems[1].Text.StartsWith("+"));
-            itemCountLabel.Text = $"Total Items: {itemCount}";
-        }
+        private void UpdateItemCount() => itemCountLabel.Text = $"Total Items: {selectionListView.Items.Cast<ListViewItem>().Count(item => !item.SubItems[1].Text.StartsWith("+"))}";
 
-        private void UpdateTotalPrice()
-        {
-            decimal totalPrice = selectionListView.Items.Cast<ListViewItem>()
-                .Where(item => !string.IsNullOrEmpty(item.SubItems[2].Text))
-                .Sum(item => decimal.Parse(item.SubItems[2].Text.Replace("$", "").Trim()));
-
-            totalPriceLabel.Text = $"Total Price: ${totalPrice:F2}";
-        }
+        private void UpdateTotalPrice() => totalPriceLabel.Text = $"Total Price: ${selectionListView.Items.Cast<ListViewItem>().Where(item => !string.IsNullOrEmpty(item.SubItems[2].Text)).Sum(item => decimal.Parse(item.SubItems[2].Text.Replace("$", "").Trim())):F2}";
 
         private void ResetModifierSelectionState(string modCode)
         {
@@ -795,26 +569,16 @@ namespace ThermalPrinterNetworkExample
                 foreach (var detail in modifierDetails)
                 {
                     string detailDesc = detail["description"]?.ToString() ?? "Unknown Detail";
-                    if (modifierSelectionState.ContainsKey(detailDesc))
-                    {
-                        modifierSelectionState[detailDesc] = false;
-                    }
-
+                    modifierSelectionState[detailDesc] = false;
                     var itemToRemove = selectionListView.Items.Cast<ListViewItem>().FirstOrDefault(item => item.SubItems[1].Text == detailDesc);
-                    if (itemToRemove != null)
-                    {
-                        selectionListView.Items.Remove(itemToRemove);
-                    }
+                    if (itemToRemove != null) selectionListView.Items.Remove(itemToRemove);
                 }
             }
         }
 
         private void ResetPreviousSelections()
         {
-            // Clear the modifier selection state
             modifierSelectionState.Clear();
-
-            // Reset any other necessary states here
             currentModifierCodes.Clear();
             currentModifierIndex = 0;
         }
@@ -826,17 +590,8 @@ namespace ThermalPrinterNetworkExample
             panel.RowStyles.Clear();
             panel.ColumnCount = 7;
 
-            int column = 0, row = 0;
             foreach (var categoryPanel in categoryPanels)
-            {
-                if (column >= panel.ColumnCount)
-                {
-                    column = 0;
-                    row++;
-                }
-                panel.Controls.Add(categoryPanel, column, row);
-                column++;
-            }
+                panel.Controls.Add(categoryPanel);
 
             currentScreenType = "MainCategory";
             panel.Update();
@@ -845,69 +600,38 @@ namespace ThermalPrinterNetworkExample
 
         private void UpdateNavigationButtons()
         {
-            bool previousButtonVisible = (currentScreenType == "Modifier" && currentModifierIndex > 1) || currentScreenType == "FinalSale";
-            bool nextButtonVisible = false;
-
-            if (currentScreenType == "Modifier" && currentModifierIndex <= currentModifierCodes.Count)
-            {
-                var modChoiceType = modifierData["data"].FirstOrDefault(m => m["modcode"]?.ToString() == currentModifierCodes[currentModifierIndex - 1])?["modchoice"]?.ToString();
-                if (modChoiceType == "one" || modChoiceType == "upsale")
-                {
-                    nextButtonVisible = true;
-                }
-            }
-
-            previousButton.Visible = previousButtonVisible;
-            nextButton.Visible = nextButtonVisible;
-
-            // Ensure the finish order button is visible when on the final sale screen
+            previousButton.Visible = (currentScreenType == "Modifier" && currentModifierIndex > 1) || currentScreenType == "FinalSale";
+            nextButton.Visible = currentScreenType == "Modifier" && currentModifierIndex <= currentModifierCodes.Count && (modifierData["data"].FirstOrDefault(m => m["modcode"]?.ToString() == currentModifierCodes[currentModifierIndex - 1]) != null && (modifierData["data"].First(m => m["modcode"].ToString() == currentModifierCodes[currentModifierIndex - 1])["modchoice"].ToString() == "one" || modifierData["data"].First(m => m["modcode"].ToString() == currentModifierCodes[currentModifierIndex - 1])["modchoice"].ToString() == "upsale"));
             finishOrderButton.Visible = currentScreenType == "FinalSale";
         }
 
         private ReceiptBuilder ExtractReceiptFieldsFromJson(List<OrderedItem> orderedItems)
         {
-            if (itemData == null || !itemData["data"].Any())
-            {
-                MessageBox.Show("Item data not loaded or empty.");
-                return null;
-            }
+            var firstItem = itemData["data"].FirstOrDefault();
+            if (firstItem == null) return null;
 
-            // Assuming the first item contains the necessary store information
-            var firstItem = itemData["data"].First();
+            string[] storenameParts = firstItem["storename"]?.ToString().Split('_') ?? new string[0];
+            string storeName = storenameParts.Length > 0 ? storenameParts[0] : "Store Name";
+            string address1 = storenameParts.Length > 1 ? storenameParts[1] : "1234 Main St, Anytown, USA";
 
-            string tempPrinter = "TEMP_PRINTER";  // Default value
-            string storeName = "Store Name";  // Default value
-            string address1 = "1234 Main St, Anytown, USA";  // Default value
-            string address2 = "AnyCity, PA 10001"; // Default value
-            string phoneNumber = "215-555-4444";  // Default value
-
-            // Extract store name and address from storename field
-            string storenameField = firstItem["storename"]?.ToString();
-            if (!string.IsNullOrEmpty(storenameField))
-            {
-                var parts = storenameField.Split('_');
-                if (parts.Length > 0) storeName = parts[0];
-                if (parts.Length > 1) address1 = parts[1];
-            }
-
-            string barcodeSize = "100";  // Default value
-            string priceBar = "123456789012";  // Default value
-            string barcodeWidth = "1";  // Default value
-
-            return new ReceiptBuilder(tempPrinter, storeName, address1, address2, phoneNumber, barcodeSize, priceBar, barcodeWidth, orderedItems);
+            return new ReceiptBuilder("TEMP_PRINTER", storeName, address1, "AnyCity, PA 10001", "215-555-4444", "100", "123456789012", "1", orderedItems);
         }
 
-        // NavigationEntry class
         public class NavigationEntry
         {
-            public string ScreenType { get; set; }
-            public string ScreenData { get; set; }
+            public string ScreenType { get; }
+            public string ScreenData { get; }
 
             public NavigationEntry(string screenType, string screenData)
             {
                 ScreenType = screenType;
                 ScreenData = screenData;
             }
+        }
+
+        private void HttpCallButton_Click(object sender, EventArgs e)
+        {
+            HttpService.MakeHttpCall("exampleOrderNumber"); // Replace with actual logic to get the order number
         }
     }
 }
