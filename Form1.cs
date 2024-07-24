@@ -296,8 +296,13 @@ namespace ThermalPrinterNetworkExample
                 return;
             }
 
-            // Get the next order number
-            int orderNumber = OrderNumberManager.GetNextOrderNumber();
+            // Get the order number from the server
+            string orderNumber = HttpService.GetOrderNumber();
+            if (string.IsNullOrEmpty(orderNumber))
+            {
+                MessageBox.Show("Failed to retrieve order number.");
+                return;
+            }
 
             using (var printerClient = new PrinterClient(printerIpAddress, printerPort))
             {
@@ -306,7 +311,7 @@ namespace ThermalPrinterNetworkExample
             }
 
             // Make HTTP call with the order number
-            HttpService.MakeHttpCall(orderNumber.ToString());
+            HttpService.MakeHttpCall();
 
             selectionListView.Items.Clear();
             ResetPreviousSelections();
@@ -631,7 +636,7 @@ namespace ThermalPrinterNetworkExample
 
         private void HttpCallButton_Click(object sender, EventArgs e)
         {
-            HttpService.MakeHttpCall("exampleOrderNumber"); // Replace with actual logic to get the order number
+            HttpService.MakeHttpCall();
         }
     }
 }
