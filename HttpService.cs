@@ -38,7 +38,7 @@ namespace ThermalPrinterNetworkExample
             string url = @"http://apibeast.com/Datatables/controllers/samtest.php";
             var parameters = new NameValueCollection
             {
-                { "instruction", "completeOrder" }
+                { "instruction", "getOrderNumber" }
             };
 
             using (WebClient client = new WebClient())
