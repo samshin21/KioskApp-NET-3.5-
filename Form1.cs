@@ -52,7 +52,7 @@ namespace ThermalPrinterNetworkExample
             startOverButton = CreateNavigationButton("Start Over", buttonWidth, buttonHeight, buttonFont, StartOverButton_Click);
             previousButton = CreateNavigationButton("Previous", buttonWidth, buttonHeight, buttonFont, PreviousButton_Click, false);
             nextButton = CreateNavigationButton("Next", buttonWidth, buttonHeight, buttonFont, NextButton_Click, false);
-            finishOrderButton = CreateNavigationButton("Finish Order", buttonWidth, buttonHeight, buttonFont, FinishOrderButton_Click, true);
+            finishOrderButton = CreateNavigationButton("Finish Order", buttonWidth, buttonHeight, buttonFont, FinishOrderButton_Click, false); // Updated visibility
             httpCallButton = CreateNavigationButton("Make HTTP Call", buttonWidth, buttonHeight, buttonFont, HttpCallButton_Click, true); // New button
 
             PositionButtons(buttonWidth, buttonHeight, buttonSpacing);
@@ -258,6 +258,30 @@ namespace ThermalPrinterNetworkExample
                     case "Category":
                         DisplayMainCategory();
                         currentScreenType = "MainCategory";
+                        break;
+                    case "FinalSale": // Handle navigation from the final sale screen
+                        if (navigationHistory.Count > 0)
+                        {
+                            previousScreen = navigationHistory.Pop();
+                            if (previousScreen.ScreenType == "Modifier")
+                            {
+                                currentModifierIndex = currentModifierCodes.Count; // Reset to last modifier index
+                                var modCode = currentModifierCodes[currentModifierIndex - 1];
+                                ResetModifierSelectionState(modCode); // Reset selection state for "one" type modifiers
+                                DisplayModifierDetails(modCode);
+                                currentScreenType = "Modifier";
+                            }
+                            else if (previousScreen.ScreenType == "Item")
+                            {
+                                RefreshItem(previousScreen.ScreenData);
+                                currentScreenType = "Item";
+                            }
+                            else if (previousScreen.ScreenType == "Category")
+                            {
+                                RefreshCategory(previousScreen.ScreenData);
+                                currentScreenType = "Category";
+                            }
+                        }
                         break;
                 }
             }
@@ -488,6 +512,8 @@ namespace ThermalPrinterNetworkExample
             finalPanel.Controls.Add(CreateNavigationButton("Add Item", 150, 50, new Font("Calibri", 12, FontStyle.Bold), AddItemButton_Click));
             finalPanel.Controls.Add(finishOrderButton);
 
+            finishOrderButton.Visible = true; // Show finishOrderButton only on the final sale screen
+
             panel.Controls.Add(finalPanel);
             currentScreenType = "FinalSale";
             UpdateNavigationButtons();
@@ -575,7 +601,7 @@ namespace ThermalPrinterNetworkExample
                 {
                     string detailDesc = detail["description"]?.ToString() ?? "Unknown Detail";
                     modifierSelectionState[detailDesc] = false;
-                    var itemToRemove = selectionListView.Items.Cast<ListViewItem>().FirstOrDefault(item => item.SubItems[1].Text == detailDesc);
+                    var itemToRemove = selectionListView.Items.Cast<ListViewItem>().FirstOrDefault(item => item.SubItems[1].Text == "+" + detailDesc);
                     if (itemToRemove != null) selectionListView.Items.Remove(itemToRemove);
                 }
             }
@@ -607,7 +633,7 @@ namespace ThermalPrinterNetworkExample
         {
             previousButton.Visible = (currentScreenType == "Modifier" && currentModifierIndex > 1) || currentScreenType == "FinalSale";
             nextButton.Visible = currentScreenType == "Modifier" && currentModifierIndex <= currentModifierCodes.Count && (modifierData["data"].FirstOrDefault(m => m["modcode"]?.ToString() == currentModifierCodes[currentModifierIndex - 1]) != null && (modifierData["data"].First(m => m["modcode"].ToString() == currentModifierCodes[currentModifierIndex - 1])["modchoice"].ToString() == "one" || modifierData["data"].First(m => m["modcode"].ToString() == currentModifierCodes[currentModifierIndex - 1])["modchoice"].ToString() == "upsale"));
-            finishOrderButton.Visible = currentScreenType == "FinalSale";
+            finishOrderButton.Visible = currentScreenType == "FinalSale"; // Show finishOrderButton only on the final sale screen
         }
 
         private ReceiptBuilder ExtractReceiptFieldsFromJson(List<OrderedItem> orderedItems)
